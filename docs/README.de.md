@@ -32,6 +32,9 @@
 | 🏷️ **Tag-System** | Erinnerungskategorisierung, Tag-Suche, Umbenennung, Zusammenführung |
 | 💰 **Token Sparen** | Semantischer Abruf bei Bedarf ersetzt Massen-Kontextinjektion, 50%+ weniger redundante Tokens |
 | 📋 **Problem-Tracking** | Leichtgewichtiger Issue-Tracker, KI zeichnet automatisch auf und archiviert |
+| 🔐 **Web-Authentifizierung** | Dashboard unterstützt Token-Authentifizierung gegen unbefugten Zugriff |
+| ⚡ **Embedding-Cache** | Keine redundante Vektorberechnung für identische Inhalte, schnellere Schreibvorgänge |
+| 📤 **Export/Import** | Erinnerungsdaten JSON-Export und -Import, unterstützt Migration und Backup |
 
 ## 🏗️ Architektur
 
@@ -184,9 +187,12 @@ run web --port 9080
 
 Besuche `http://localhost:9080` im Browser.
 
-- Mehrere Projekte wechseln, Erinnerungen durchsuchen/bearbeiten/löschen
+- Mehrere Projekte wechseln, Erinnerungen durchsuchen/bearbeiten/löschen/exportieren/importieren
+- Semantische Suche (Vektorähnlichkeits-Matching)
+- Projektdaten mit einem Klick löschen
 - Sitzungsstatus, Problem-Tracking
 - Tag-Verwaltung (Umbenennen, Zusammenführen, Stapellöschung)
+- Token-Authentifizierungsschutz
 - 3D-Vektornetzwerk-Visualisierung
 - 🌐 Mehrsprachige Unterstützung (简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語)
 
@@ -316,6 +322,27 @@ Oder env in der MCP-Konfiguration hinzufügen:
 | Tokenizer | HuggingFace Tokenizers |
 | Protokoll | Model Context Protocol (MCP) |
 | Web | Nativer HTTPServer + Vanilla JS |
+
+## 📋 Änderungsprotokoll
+
+### v0.2.0
+
+- 🔐 Web-Dashboard Token-Authentifizierung
+- ⚡ Embedding-Vektor-Cache, keine redundante Berechnung für identische Inhalte
+- 🔍 recall unterstützt kombinierte query + tags Suche
+- 🗑️ forget unterstützt Stapellöschung (memory_ids Parameter)
+- 📤 Erinnerungs-Export/Import (JSON-Format)
+- 🔎 Semantische Suche im Web-Dashboard
+- 🗂️ Projekt-Löschbutton im Web-Dashboard
+- 📊 Web-Dashboard Leistungsoptimierung (vollständige Tabellenscans eliminiert)
+- 🧠 digest intelligente Komprimierung
+- 💾 session_id Persistenz
+- 📏 content Längenbegrenzungsschutz
+- 🏷️ version dynamische Referenz (nicht mehr hartcodiert)
+
+### v0.1.x
+
+- Erstveröffentlichung: 7 MCP-Werkzeuge, Web-Dashboard, 3D-Vektorvisualisierung, Mehrsprachigkeit
 
 ## License
 

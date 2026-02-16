@@ -32,6 +32,9 @@
 | 🏷️ **Sistema de Etiquetas** | Categorización de memorias, búsqueda, renombrado y fusión de etiquetas |
 | 💰 **Ahorro de Tokens** | Recuperación semántica bajo demanda reemplaza la inyección masiva de contexto, reduciendo 50%+ de tokens redundantes |
 | 📋 **Seguimiento de Problemas** | Rastreador de issues ligero, IA registra y archiva automáticamente |
+| 🔐 **Autenticación Web** | El panel soporta autenticación por Token para prevenir acceso no autorizado |
+| ⚡ **Caché de Embedding** | Sin cálculo vectorial redundante para contenido idéntico, escrituras más rápidas |
+| 📤 **Exportar/Importar** | Exportación e importación de datos de memoria en JSON, soporta migración y respaldo |
 
 ## 🏗️ Arquitectura
 
@@ -184,9 +187,12 @@ run web --port 9080
 
 Visita `http://localhost:9080` en tu navegador.
 
-- Cambio entre múltiples proyectos, explorar/buscar/editar/eliminar memorias
+- Cambio entre múltiples proyectos, explorar/buscar/editar/eliminar/exportar/importar memorias
+- Búsqueda semántica (coincidencia por similitud vectorial)
+- Eliminación de datos de proyecto con un clic
 - Estado de sesión, seguimiento de problemas
 - Gestión de etiquetas (renombrar, fusionar, eliminación por lotes)
+- Protección por autenticación Token
 - Visualización 3D de red vectorial de memorias
 - 🌐 Soporte multilingüe (简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語)
 
@@ -316,6 +322,27 @@ O agregar env en la configuración MCP:
 | Tokenizador | HuggingFace Tokenizers |
 | Protocolo | Model Context Protocol (MCP) |
 | Web | HTTPServer nativo + Vanilla JS |
+
+## 📋 Registro de Cambios
+
+### v0.2.0
+
+- 🔐 Autenticación por Token en el panel Web
+- ⚡ Caché de vectores Embedding, sin cálculo redundante para contenido idéntico
+- 🔍 recall soporta búsqueda combinada query + tags
+- 🗑️ forget soporta eliminación por lotes (parámetro memory_ids)
+- 📤 Exportación/importación de memorias (formato JSON)
+- 🔎 Búsqueda semántica en el panel Web
+- 🗂️ Botón de eliminación de proyecto en el panel Web
+- 📊 Optimización de rendimiento del panel Web (eliminación de escaneos completos de tabla)
+- 🧠 Compresión inteligente de digest
+- 💾 Persistencia de session_id
+- 📏 Protección de límite de longitud de content
+- 🏷️ Referencia dinámica de version (ya no codificada)
+
+### v0.1.x
+
+- Versión inicial: 7 herramientas MCP, panel Web, visualización 3D vectorial, soporte multilingüe
 
 ## License
 

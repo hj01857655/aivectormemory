@@ -32,6 +32,9 @@
 | 🏷️ **標籤體系** | 記憶分類管理，支援標籤搜尋、重新命名、合併 |
 | 💰 **節省 Token** | 語義檢索按需召回，替代全量上下文注入，減少 50%+ 重複 Token 消耗 |
 | 📋 **問題追蹤** | 輕量級 issue tracker，AI 自動記錄和歸檔 |
+| 🔐 **Web 認證** | 看板支援 Token 認證，防止未授權存取 |
+| ⚡ **Embedding 快取** | 相同內容不重複計算向量，提升寫入效能 |
+| 📤 **匯出/匯入** | 記憶資料 JSON 匯出匯入，支援遷移和備份 |
 
 ## 🏗️ 架構
 
@@ -184,9 +187,12 @@ run web --port 9080
 
 瀏覽器存取 `http://localhost:9080`
 
-- 多專案切換，記憶瀏覽/搜尋/編輯/刪除
+- 多專案切換，記憶瀏覽/搜尋/編輯/刪除/匯出/匯入
+- 語義搜尋（向量相似度匹配）
+- 專案資料一鍵刪除
 - 會話狀態、問題追蹤
 - 標籤管理（重新命名、合併、批次刪除）
+- Token 認證保護
 - 3D 向量記憶網路視覺化
 - 🌐 多語言支援（简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語）
 
@@ -316,6 +322,27 @@ export HF_ENDPOINT=https://hf-mirror.com
 | 分詞器 | HuggingFace Tokenizers |
 | 協議 | Model Context Protocol (MCP) |
 | Web | 原生 HTTPServer + Vanilla JS |
+
+## 📋 更新日誌
+
+### v0.2.0
+
+- 🔐 Web 看板 Token 認證機制
+- ⚡ Embedding 向量快取，相同內容不重複計算
+- 🔍 recall 支援 query + tags 組合查詢
+- 🗑️ forget 支援批次刪除（memory_ids 參數）
+- 📤 記憶匯出/匯入（JSON 格式）
+- 🔎 Web 看板語義搜尋
+- 🗂️ Web 看板專案刪除按鈕
+- 📊 Web 看板效能最佳化（消除全表掃描）
+- 🧠 digest 智慧壓縮
+- 💾 session_id 持久化
+- 📏 content 長度限制保護
+- 🏷️ version 動態引用（不再寫死）
+
+### v0.1.x
+
+- 初始版本：7 個 MCP 工具、Web 看板、3D 向量視覺化、多語言支援
 
 ## License
 

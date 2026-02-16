@@ -30,8 +30,11 @@
 | 🔌 **全 IDE 支持** | OpenCode / Claude Code / Cursor / Kiro / Windsurf / VSCode / Trae 等 |
 | 📁 **项目隔离** | 多项目共用一个 DB，通过 project_dir 自动隔离 |
 | 🏷️ **标签体系** | 记忆分类管理，支持标签搜索、重命名、合并 |
-| � **节省 Token** | 语义检索按需召回，替代全量上下文注入，减少 50%+ 重复 Token 消耗 |
-| �📋 **问题追踪** | 轻量级 issue tracker，AI 自动记录和归档 |
+| 💰 **节省 Token** | 语义检索按需召回，替代全量上下文注入，减少 50%+ 重复 Token 消耗 |
+| 📋 **问题追踪** | 轻量级 issue tracker，AI 自动记录和归档 |
+| 🔐 **Web 认证** | 看板支持 Token 认证，防止未授权访问 |
+| ⚡ **Embedding 缓存** | 相同内容不重复计算向量，提升写入性能 |
+| 📤 **导出/导入** | 记忆数据 JSON 导出导入，支持迁移和备份 |
 
 ## 🏗️ 架构
 
@@ -193,9 +196,12 @@ run web --port 9080
 
 浏览器访问 `http://localhost:9080`
 
-- 多项目切换，记忆浏览/搜索/编辑/删除
-- 会话状态、问题跟踪
+- 多项目切换，记忆浏览/搜索/编辑/删除/导出/导入
+- 语义搜索（向量相似度匹配）
+- 项目数据一键删除
+- 会话状态、问题追踪
 - 标签管理（重命名、合并、批量删除）
+- Token 认证保护
 - 3D 向量记忆网络可视化
 - 🌐 多语言支持（简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語）
 
@@ -325,6 +331,27 @@ export HF_ENDPOINT=https://hf-mirror.com
 | 分词器 | HuggingFace Tokenizers |
 | 协议 | Model Context Protocol (MCP) |
 | Web | 原生 HTTPServer + Vanilla JS |
+
+## 📋 更新日志
+
+### v0.2.0
+
+- 🔐 Web 看板 Token 认证机制
+- ⚡ Embedding 向量缓存，相同内容不重复计算
+- 🔍 recall 支持 query + tags 组合查询
+- 🗑️ forget 支持批量删除（memory_ids 参数）
+- 📤 记忆导出/导入（JSON 格式）
+- 🔎 Web 看板语义搜索
+- 🗂️ Web 看板项目删除按钮
+- 📊 Web 看板性能优化（消除全表扫描）
+- 🧠 digest 智能压缩
+- 💾 session_id 持久化
+- 📏 content 长度限制保护
+- 🏷️ version 动态引用（不再硬编码）
+
+### v0.1.x
+
+- 初始版本：7 个 MCP 工具、Web 看板、3D 向量可视化、多语言支持
 
 ## License
 

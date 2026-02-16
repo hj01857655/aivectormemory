@@ -32,6 +32,9 @@
 | 🏷️ **Système d'Étiquettes** | Catégorisation des mémoires, recherche, renommage et fusion d'étiquettes |
 | 💰 **Économie de Tokens** | Récupération sémantique à la demande remplace l'injection massive de contexte, réduisant 50%+ de tokens redondants |
 | 📋 **Suivi des Problèmes** | Traqueur d'issues léger, l'IA enregistre et archive automatiquement |
+| 🔐 **Authentification Web** | Le tableau de bord supporte l'authentification par Token contre les accès non autorisés |
+| ⚡ **Cache Embedding** | Pas de calcul vectoriel redondant pour un contenu identique, écritures plus rapides |
+| 📤 **Export/Import** | Export et import des données mémoire en JSON, supporte la migration et la sauvegarde |
 
 ## 🏗️ Architecture
 
@@ -184,9 +187,12 @@ run web --port 9080
 
 Visitez `http://localhost:9080` dans votre navigateur.
 
-- Basculement entre projets, parcourir/rechercher/modifier/supprimer les mémoires
+- Basculement entre projets, parcourir/rechercher/modifier/supprimer/exporter/importer les mémoires
+- Recherche sémantique (correspondance par similarité vectorielle)
+- Suppression des données de projet en un clic
 - État de session, suivi des problèmes
 - Gestion des étiquettes (renommer, fusionner, suppression par lots)
+- Protection par authentification Token
 - Visualisation 3D du réseau vectoriel de mémoires
 - 🌐 Support multilingue (简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語)
 
@@ -316,6 +322,27 @@ Ou ajouter env dans la configuration MCP :
 | Tokenizer | HuggingFace Tokenizers |
 | Protocole | Model Context Protocol (MCP) |
 | Web | HTTPServer natif + Vanilla JS |
+
+## 📋 Journal des Modifications
+
+### v0.2.0
+
+- 🔐 Authentification par Token du tableau de bord Web
+- ⚡ Cache de vecteurs Embedding, pas de calcul redondant pour un contenu identique
+- 🔍 recall supporte la recherche combinée query + tags
+- 🗑️ forget supporte la suppression par lots (paramètre memory_ids)
+- 📤 Export/import de mémoires (format JSON)
+- 🔎 Recherche sémantique dans le tableau de bord Web
+- 🗂️ Bouton de suppression de projet dans le tableau de bord Web
+- 📊 Optimisation des performances du tableau de bord Web (élimination des analyses complètes de table)
+- 🧠 Compression intelligente de digest
+- 💾 Persistance de session_id
+- 📏 Protection de limite de longueur de content
+- 🏷️ Référence dynamique de version (plus codée en dur)
+
+### v0.1.x
+
+- Version initiale : 7 outils MCP, tableau de bord Web, visualisation 3D vectorielle, support multilingue
 
 ## License
 

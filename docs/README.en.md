@@ -32,6 +32,9 @@
 | 🏷️ **Tag System** | Memory categorization, tag search, rename, merge |
 | 💰 **Save Tokens** | Semantic retrieval on demand replaces bulk context injection, reducing 50%+ redundant token usage |
 | 📋 **Issue Tracking** | Lightweight issue tracker, AI auto-records and archives |
+| 🔐 **Web Auth** | Dashboard supports Token authentication to prevent unauthorized access |
+| ⚡ **Embedding Cache** | No redundant vector computation for identical content, faster writes |
+| 📤 **Export/Import** | Memory data JSON export and import, supports migration and backup |
 
 ## 🏗️ Architecture
 
@@ -184,9 +187,12 @@ run web --port 9080
 
 Visit `http://localhost:9080` in your browser.
 
-- Multi-project switching, memory browse/search/edit/delete
+- Multi-project switching, memory browse/search/edit/delete/export/import
+- Semantic search (vector similarity matching)
+- One-click project data deletion
 - Session status, issue tracking
 - Tag management (rename, merge, batch delete)
+- Token authentication protection
 - 3D vector memory network visualization
 - 🌐 Multi-language support (简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語)
 
@@ -316,6 +322,27 @@ Or add env to MCP config:
 | Tokenizer | HuggingFace Tokenizers |
 | Protocol | Model Context Protocol (MCP) |
 | Web | Native HTTPServer + Vanilla JS |
+
+## 📋 Changelog
+
+### v0.2.0
+
+- 🔐 Web dashboard Token authentication
+- ⚡ Embedding vector cache, no redundant computation for identical content
+- 🔍 recall supports combined query + tags search
+- 🗑️ forget supports batch deletion (memory_ids parameter)
+- 📤 Memory export/import (JSON format)
+- 🔎 Web dashboard semantic search
+- 🗂️ Web dashboard project delete button
+- 📊 Web dashboard performance optimization (eliminated full table scans)
+- 🧠 digest smart compression
+- 💾 session_id persistence
+- 📏 content length limit protection
+- 🏷️ version dynamic reference (no longer hardcoded)
+
+### v0.1.x
+
+- Initial release: 7 MCP tools, Web dashboard, 3D vector visualization, multi-language support
 
 ## License
 
