@@ -242,10 +242,9 @@ HOOKS_CONFIGS = [
     {
         "filename": "dev-workflow-check.kiro.hook",
         "content": {
-            "enabled": True,
             "name": "开发流程检查",
+            "version": "1.0.0",
             "description": "每次收到用户消息时，检查核心原则、问题处理原则、自测要求",
-            "version": "1",
             "when": {"type": "promptSubmit"},
             "then": {
                 "type": "askAgent",
@@ -289,22 +288,19 @@ HOOKS_CONFIGS = [
                     "> 遇到报错或异常时严禁盲目测试，必须分析问题根本原因。"
                 ),
             },
-            "shortName": "dev-workflow-check",
         },
     },
     {
         "filename": "pre-tool-use-check.kiro.hook",
         "content": {
-            "enabled": True,
             "name": "代码修改前检查 track issue",
+            "version": "1.0.0",
             "description": "Edit/Write 工具执行前，检查当前项目是否有活跃的 track issue，没有则拒绝执行",
-            "version": "1",
-            "when": {"type": "preToolUse", "matcher": "Edit|Write"},
+            "when": {"type": "preToolUse", "toolTypes": ["write"]},
             "then": {
-                "type": "command",
+                "type": "runCommand",
                 "command": "",  # 占位，install 时动态填充
             },
-            "shortName": "pre-tool-use-check",
         },
     },
 ]
