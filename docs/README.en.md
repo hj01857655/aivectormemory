@@ -353,6 +353,14 @@ Or add env to MCP config:
 
 ## 📋 Changelog
 
+### v1.0.3
+
+**recall Search Optimization**
+- 🔍 `recall` adds `tags_mode` parameter: `any` (OR match) / `all` (AND match)
+- 🔍 `query + tags` defaults to OR matching (any tag hit enters candidate set), fixing missed results with multiple tags
+- 🔍 Tags-only mode keeps AND matching (precise category browsing), backward compatible
+- 📝 Steering rules updated with search guidelines — choose tags by search purpose, no more blanket "pitfall" tag
+
 ### v0.2.8
 
 **Web Dashboard**

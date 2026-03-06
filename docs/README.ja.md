@@ -353,6 +353,14 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 ## 📋 更新履歴
 
+### v1.0.3
+
+**recall 検索最適化**
+- 🔍 `recall` に `tags_mode` パラメータ追加：`any`（OR マッチ）/ `all`（AND マッチ）
+- 🔍 `query + tags` 時はデフォルトで OR マッチ（いずれかのタグ一致で候補入り）、複数タグ検索の漏れを解決
+- 🔍 `tags` のみの場合は AND マッチ維持（正確なカテゴリ閲覧）、後方互換
+- 📝 Steering ルールに検索ガイドラインを追加
+
 ### v0.2.8
 
 **Web ダッシュボード**

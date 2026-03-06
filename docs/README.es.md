@@ -353,6 +353,14 @@ O agregar env en la configuración MCP:
 
 ## 📋 Registro de Cambios
 
+### v1.0.3
+
+**Optimización de búsqueda recall**
+- 🔍 `recall` añade parámetro `tags_mode`: `any` (coincidencia OR) / `all` (coincidencia AND)
+- 🔍 `query + tags` usa OR por defecto (cualquier etiqueta coincidente entra en candidatos), resolviendo resultados perdidos con múltiples etiquetas
+- 🔍 Solo `tags` mantiene AND (navegación precisa por categoría), compatible con versiones anteriores
+- 📝 Reglas de Steering actualizadas con directrices de búsqueda
+
 ### v0.2.8
 
 **Panel Web**

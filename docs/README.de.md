@@ -353,6 +353,14 @@ Oder env in der MCP-Konfiguration hinzufügen:
 
 ## 📋 Änderungsprotokoll
 
+### v1.0.3
+
+**recall Suchoptimierung**
+- 🔍 `recall` neuer Parameter `tags_mode`: `any` (OR-Abgleich) / `all` (AND-Abgleich)
+- 🔍 `query + tags` verwendet standardmäßig OR-Abgleich (jeder Tag-Treffer wird Kandidat), behebt fehlende Ergebnisse bei mehreren Tags
+- 🔍 Nur `tags` behält AND-Abgleich (präzise Kategorienavigation), abwärtskompatibel
+- 📝 Steering-Regeln mit Suchrichtlinien aktualisiert
+
 ### v0.2.8
 
 **Web-Dashboard**

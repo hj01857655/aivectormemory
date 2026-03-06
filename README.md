@@ -354,6 +354,14 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 ## 📋 更新日志
 
+### v1.0.3
+
+**recall 搜索优化**
+- 🔍 `recall` 新增 `tags_mode` 参数：`any`（OR 匹配）/ `all`（AND 匹配）
+- 🔍 `query + tags` 时默认 OR 匹配（匹配任一标签即进入候选），解决多标签搜索漏结果问题
+- 🔍 仅 `tags` 时保持 AND 匹配（精确分类浏览），向后兼容
+- 📝 Steering 规则更新搜索规范，按搜索目的选标签，禁止所有搜索都带"踩坑"
+
 ### v0.2.8
 
 **Web 看板**

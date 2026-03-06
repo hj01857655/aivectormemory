@@ -353,6 +353,14 @@ Ou ajouter env dans la configuration MCP :
 
 ## 📋 Journal des Modifications
 
+### v1.0.3
+
+**Optimisation de la recherche recall**
+- 🔍 `recall` ajoute le paramètre `tags_mode` : `any` (correspondance OR) / `all` (correspondance AND)
+- 🔍 `query + tags` utilise OR par défaut (tout tag correspondant entre dans les candidats), résolvant les résultats manqués avec plusieurs tags
+- 🔍 `tags` seul conserve AND (navigation précise par catégorie), rétrocompatible
+- 📝 Règles de Steering mises à jour avec directives de recherche
+
 ### v0.2.8
 
 **Tableau de Bord Web**
