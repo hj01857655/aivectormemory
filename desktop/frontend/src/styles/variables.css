@@ -1,0 +1,81 @@
+/* Dark theme (default) */
+:root {
+  /* Backgrounds */
+  --bg-primary: #0F172A;
+  --bg-surface: #1E293B;
+  --bg-sidebar: #0B1120;
+  --bg-input: #0F172A;
+  --bg-hover: rgba(59,130,246,0.06);
+  --bg-card-hover: rgba(59,130,246,0.04);
+
+  /* Text */
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --text-dim: #475569;
+  --text-heading: #CBD5E1;
+
+  /* Borders */
+  --border: #334155;
+  --border-hover: #475569;
+  --border-light: rgba(51,65,85,0.5);
+
+  /* Accent */
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-light: #60A5FA;
+  --accent-bg: rgba(59,130,246,0.15);
+  --accent-bg-light: rgba(59,130,246,0.1);
+  --accent-bg-subtle: rgba(59,130,246,0.08);
+  --accent-tag: rgba(59,130,246,0.12);
+
+  /* Status colors */
+  --color-success: #4ADE80;
+  --color-success-bg: rgba(34,197,94,0.15);
+  --color-success-dot: #22C55E;
+  --color-warning: #FBBF24;
+  --color-warning-bg: rgba(245,158,11,0.15);
+  --color-error: #EF4444;
+  --color-error-light: #F87171;
+  --color-error-bg: rgba(239,68,68,0.15);
+  --color-info: #60A5FA;
+  --color-info-bg: rgba(59,130,246,0.15);
+  --color-cyan: #06B6D4;
+  --color-purple: #818CF8;
+  --color-purple-bg: rgba(99,102,241,0.15);
+
+  /* Shadows */
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.2);
+  --shadow-card-hover: 0 4px 24px rgba(0,0,0,0.3);
+  --shadow-modal: 0 20px 60px rgba(0,0,0,0.4);
+  --shadow-focus: 0 0 0 3px rgba(59,130,246,0.15);
+
+  /* Overlay */
+  --overlay: rgba(0,0,0,0.6);
+
+  /* Spacing */
+  --sidebar-width: 240px;
+  --content-padding: 28px 32px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 20px;
+
+  /* Typography */
+  --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 32px;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+}

@@ -30,14 +30,10 @@ opencode.json
 .DS_Store
 Thumbs.db
 
-# Source
-aivectormemory/
-
-# Test
+# Test cache
 .pytest_cache/
 htmlcov/
 .coverage
-tests/
 
 # Screenshots (Playwright)
 tests/screenshots/
