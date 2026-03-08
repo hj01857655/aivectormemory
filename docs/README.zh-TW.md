@@ -1,4 +1,4 @@
-🌐 [简体中文](../README.md) | 繁體中文 | [English](README.en.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [日本語](README.ja.md)
+🌐 [简体中文](README.zh-CN.md) | 繁體中文 | [English](../README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [日本語](README.ja.md)
 
 <p align="center">
   <img src="logo.png" alt="AIVectorMemory Logo" width="200">
@@ -35,7 +35,7 @@
 
 <p align="center">
   QQ群：1085682431 &nbsp;|&nbsp; 微信：changhuibiz<br>
-  源碼加QQ群或微信獲取
+  共同参与项目开发加QQ群或微信交流
 </p>
 
 ## 🏗️ 架構

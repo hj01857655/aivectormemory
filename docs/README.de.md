@@ -1,4 +1,4 @@
-🌐 [简体中文](../README.md) | [繁體中文](README.zh-TW.md) | [English](README.en.md) | [Español](README.es.md) | Deutsch | [Français](README.fr.md) | [日本語](README.ja.md)
+🌐 [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [English](../README.md) | [Español](README.es.md) | Deutsch | [Français](README.fr.md) | [日本語](README.ja.md)
 
 <p align="center">
   <img src="logo.png" alt="AIVectorMemory Logo" width="200">
@@ -35,7 +35,7 @@
 
 <p align="center">
   QQ群：1085682431 &nbsp;|&nbsp; 微信：changhuibiz<br>
-  源码加QQ群或微信获取
+  共同参与项目开发加QQ群或微信交流
 </p>
 
 ## 🏗️ Architektur
