@@ -8,6 +8,7 @@ build/
 
 # Virtual environment
 .venv/
+uv.lock
 
 # AIVectorMemory data
 .aivectormemory/
