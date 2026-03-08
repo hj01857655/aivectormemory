@@ -26,10 +26,6 @@
 
 ## ✨ 核心特性
 
-<p align="center">
-  QQ群：1085682431 &nbsp;|&nbsp; 微信：changhuibiz<br>
-  源码加QQ群或微信获取
-</p>
 
 | 特性 | 说明 |
 |------|------|
@@ -44,6 +40,10 @@
 | 🔄 **智能去重** | 相似度 > 0.95 自动合并更新，记忆库永远干净，不会越用越乱 |
 | 🌐 **7 语言支持** | 简体中文 / 繁體中文 / English / Español / Deutsch / Français / 日本語，看板 + Steering 全栈国际化 |
 
+<p align="center">
+  QQ群：1085682431 &nbsp;|&nbsp; 微信：changhuibiz<br>
+  源码加QQ群或微信获取
+</p>
 <p align="center">
   <img src="docs/001.png" alt="项目选择" width="100%">
   <br>
