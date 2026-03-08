@@ -25,7 +25,7 @@
 | 🏠 **完全本地** | ONNX Runtime 本地推理，无需 API Key，数据不出本机 |
 | 🔄 **智能去重** | 余弦相似度 > 0.95 自动更新，不会重复存储 |
 | 📊 **Web 看板** | 内置管理界面，3D 向量网络可视化 |
-| 🔌 **全 IDE 支持** | Cursor / Kiro / Claude Code / Windsurf / VSCode / Trae 等 |
+| 🔌 **全 IDE 支持** | Cursor / Kiro / Claude Code / Windsurf / VSCode / Trae / OpenCode / Codex CLI 等 |
 | 📁 **项目隔离** | 多项目共用一个 DB，通过 project_dir 自动隔离 |
 | 🏷️ **标签体系** | 记忆分类管理，支持标签搜索、重命名、合并 |
 | 📋 **问题追踪** | 轻量级 issue tracker，AI 自动记录和归档 |
@@ -76,7 +76,14 @@ cd /path/to/your/project
 uvx aivectormemory install
 ```
 
-### 方式三：手动配置
+### 方式三：Codex CLI 一键接入
+
+```bash
+cd /path/to/your/project
+run install          # 交互式选择 Codex CLI
+```
+
+### 方式四：手动配置
 
 ```json
 {
@@ -101,6 +108,7 @@ uvx aivectormemory install
 | VSCode | `.vscode/mcp.json` |
 | Trae | `.trae/mcp.json` |
 | OpenCode | `opencode.json` |
+| Codex CLI | 通过 `codex mcp add` 注册（写入用户级 Codex MCP 配置） |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
 </details>
@@ -216,6 +224,7 @@ AIVectorMemory 是存储层，通过 Steering 规则告诉 AI 何时调用：
 | Kiro | `.kiro/steering/*.md` |
 | Cursor | `.cursor/rules/*.md` |
 | Claude Code | `CLAUDE.md` |
+| Codex CLI | `AGENTS.md` |
 
 ## 🇨🇳 中国大陆用户
 

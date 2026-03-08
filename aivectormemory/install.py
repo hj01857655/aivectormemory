@@ -1,6 +1,8 @@
 """aivectormemory install - 交互式为当前项目配置 MCP + Steering 规则"""
 import json
 import platform
+import shutil
+import subprocess
 from pathlib import Path
 
 # (IDE名, MCP配置路径, MCP格式, 是否全局, Steering路径, Steering写入方式)
@@ -19,6 +21,8 @@ IDES = [
     ("Trae",           lambda root: root / ".trae/mcp.json",           "standard", False,
      lambda root: root / ".trae/rules/aivectormemory.md", "file"),
     ("OpenCode",       lambda root: root / "opencode.json",            "opencode", False,
+     lambda root: root / "AGENTS.md", "append"),
+    ("Codex CLI",      lambda root: root,                               "codex", True,
      lambda root: root / "AGENTS.md", "append"),
     ("Claude Desktop", lambda _: _claude_desktop_path(),               "standard", True,
      None, None),
@@ -200,6 +204,57 @@ def _merge_config(filepath: Path, key: str, server_name: str, server_config: dic
     return True
 
 
+def _upsert_codex_mcp(server_name: str, cmd: str, args: list[str]) -> tuple[bool, str]:
+    codex_cmd = shutil.which("codex")
+    if codex_cmd is None:
+        raise RuntimeError("未检测到 codex 命令，请先安装 Codex CLI。")
+
+    get_proc = subprocess.run(
+        [codex_cmd, "mcp", "get", server_name, "--json"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    existed = False
+    if get_proc.returncode == 0:
+        existed = True
+        try:
+            current = json.loads(get_proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Codex MCP 读取配置失败: {exc}") from exc
+
+        transport = current.get("transport", {})
+        current_cmd = transport.get("command")
+        current_args = transport.get("args") or []
+        current_enabled = bool(current.get("enabled", True))
+        if current_enabled and current_cmd == cmd and current_args == args:
+            return False, "无变更"
+
+        remove_proc = subprocess.run(
+            [codex_cmd, "mcp", "remove", server_name],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if remove_proc.returncode != 0:
+            detail = (remove_proc.stderr or remove_proc.stdout).strip()
+            raise RuntimeError(f"Codex MCP 删除旧配置失败: {detail}")
+
+    add_proc = subprocess.run(
+        [codex_cmd, "mcp", "add", server_name, "--", cmd, *args],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if add_proc.returncode != 0:
+        detail = (add_proc.stderr or add_proc.stdout).strip()
+        raise RuntimeError(f"Codex MCP 注册失败: {detail}")
+
+    action = "已更新" if existed else "已新增"
+    return True, action
+
+
 def _choose(prompt: str, options: list[tuple], allow_all: bool = False) -> list | None:
     for i, (label, *_) in enumerate(options, 1):
         print(f"  {i}. {label}")
@@ -226,7 +281,7 @@ def run_install(project_dir: str | None = None):
     if runner_indices is None:
         runner_indices = [0]  # 默认 pip/pipx
     cmd, args = RUNNERS[runner_indices[0]][1](pdir)
-    print(f"  → {cmd} {' '.join(args)}\n")
+    print(f"  -> {cmd} {' '.join(args)}\n")
 
     # 2. 选择 IDE
     print("支持的 IDE：")
@@ -251,17 +306,22 @@ def run_install(project_dir: str | None = None):
         filepath = path_fn(root)
         if filepath is None:
             continue
-        server_config = _build_config(cmd, args, fmt)
-        key = "mcp" if fmt == "opencode" else "mcpServers"
-        changed = _merge_config(filepath, key, "aivectormemory", server_config)
-        status = "✓ 已更新" if changed else "- 无变更"
-        print(f"  {status}  {label} MCP 配置")
+        if fmt == "codex":
+            changed, action = _upsert_codex_mcp("aivectormemory", cmd, args)
+            status = f"[OK] {action}" if changed else "[NOOP] 无变更"
+            print(f"  {status}  {label} MCP 配置（codex mcp）")
+        else:
+            server_config = _build_config(cmd, args, fmt)
+            key = "mcp" if fmt == "opencode" else "mcpServers"
+            changed = _merge_config(filepath, key, "aivectormemory", server_config)
+            status = "[OK] 已更新" if changed else "[NOOP] 无变更"
+            print(f"  {status}  {label} MCP 配置")
 
         # 4. 写入 Steering 规则
         if steering_fn and steering_mode:
             steering_path = steering_fn(root)
             s_changed = _write_steering(steering_path, steering_mode)
-            s_status = "✓ 已生成" if s_changed else "- 无变更"
-            print(f"  {s_status}  {label} Steering 规则 → {steering_path.relative_to(root)}")
+            s_status = "[OK] 已生成" if s_changed else "[NOOP] 无变更"
+            print(f"  {s_status}  {label} Steering 规则 -> {steering_path.relative_to(root)}")
 
     print("\n安装完成，重启 IDE 即可使用")
