@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -114,14 +115,15 @@ def _run_web(token: str | None = None, project_dir: str | None = None, db_dir: s
                     process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     process.kill()
-            # uv on Windows may leave child processes alive; force kill the full tree to release DB file locks.
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                check=False,
-            )
+            # Windows 进程树清理：避免残留子进程占用 SQLite 文件；非 Windows 不执行 taskkill。
+            if os.name == "nt" and shutil.which("taskkill"):
+                subprocess.run(
+                    ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
             time.sleep(0.2)
 
 
