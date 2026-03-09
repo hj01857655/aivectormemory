@@ -69,6 +69,13 @@ function parseTags(v) {
   try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch { return []; }
 }
 function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+// Inline onclick single-quoted JS literal escaping.
+function escJsSingle(s) {
+  return escHtml(String(s ?? ''))
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\&#39;')
+    .replace(/\r?\n/g, '\\n');
+}
 function debounce(fn, ms) { let timer; return (...a) => { clearTimeout(timer); timer = setTimeout(() => fn(...a), ms); }; }
 
 function toast(msg, type = 'success') {
@@ -176,7 +183,7 @@ function renderIssueCard(i) {
     </div>
     ${i.content ? `<div class="issue-card__content">${escHtml(i.content)}</div>` : ''}
     ${structured}
-    <div class="issue-card__meta">${meta}</div>
+    <div class="issue-card__meta">${escHtml(meta)}</div>
     ${hasExpandable ? `<div class="issue-card__expand">${t('clickExpand')}</div>` : ''}
   </div>`;
 }
@@ -191,16 +198,18 @@ function formatTime(iso) {
 
 function renderMemoryCard(m) {
   const tags = parseTags(m.tags);
-  return `<div class="memory-card" style="cursor:pointer" onclick="if(!event.target.closest('.memory-card__actions')){editMemory('${m.id}')}">
+  const memoryIdText = escHtml(m.id || '');
+  const memoryIdJs = escJsSingle(m.id || '');
+  return `<div class="memory-card" style="cursor:pointer" onclick="if(!event.target.closest('.memory-card__actions')){editMemory('${memoryIdJs}')}">
     <div class="memory-card__header">
       <div class="memory-card__header-left">
-        <div class="memory-card__id">${m.id}</div>
+        <div class="memory-card__id">${memoryIdText}</div>
         <div class="memory-card__tags">${tags.map(tg => `<span class="tag">${escHtml(TAG_I18N[tg] ? t(TAG_I18N[tg]) : tg)}</span>`).join('')}</div>
         <div class="memory-card__time">${formatTime(m.created_at)}</div>
       </div>
       <div class="memory-card__actions">
-        <button class="btn btn--ghost btn--sm" onclick="event.stopPropagation();editMemory('${m.id}')">${t('edit')}</button>
-        <button class="btn btn--ghost-danger btn--sm" onclick="event.stopPropagation();deleteMemory('${m.id}')">${t('delete')}</button>
+        <button class="btn btn--ghost btn--sm" onclick="event.stopPropagation();editMemory('${memoryIdJs}')">${t('edit')}</button>
+        <button class="btn btn--ghost-danger btn--sm" onclick="event.stopPropagation();deleteMemory('${memoryIdJs}')">${t('delete')}</button>
       </div>
     </div>
     <div class="memory-card__content">${escHtml(m.content)}</div>
@@ -808,7 +817,7 @@ window.viewArchivedIssue = async (issueNum) => {
     <div class="issue-structured">
       ${contentHtml}${fieldsHtml}${filesHtml}${featureHtml}
     </div>
-    <div class="issue-card__meta" style="margin-top:12px">${meta}</div>
+    <div class="issue-card__meta" style="margin-top:12px">${escHtml(meta)}</div>
   `);
   const saveBtn = $('#modal-save');
   saveBtn.style.display = 'block';
@@ -851,7 +860,7 @@ window.toggleGroupCollapse = (fid) => {
 function renderTaskCard(t_item) {
   const cls = TASK_STATUS_CLASSES[t_item.status] || '';
   const kids = t_item.children || [];
-  const editBtn = `<span class="task-action-btn" onclick="event.stopPropagation();editTaskAction(${t_item.id},'${escHtml(t_item.title).replace(/'/g,'\\&#39;')}')" title="${t('editTask')}">✎</span>`;
+  const editBtn = `<span class="task-action-btn" onclick="event.stopPropagation();editTaskAction(${t_item.id},'${escJsSingle(t_item.title)}')" title="${t('editTask')}">✎</span>`;
   const delBtn = `<span class="task-action-btn task-action-btn--danger" onclick="event.stopPropagation();deleteTaskAction(${t_item.id})" title="${t('deleteTask')}">✕</span>`;
   if (kids.length) {
     const done = kids.filter(c => c.status === 'completed').length;
@@ -863,12 +872,12 @@ function renderTaskCard(t_item) {
         <span class="task-node-progress">${done}/${kids.length}</span>
         <span class="task-status-badge task-status--${t_item.status}">${t('status.' + t_item.status)}</span>
         <span class="task-actions-group">
-          <span class="task-action-btn" onclick="event.stopPropagation();addTaskToFeature('${escHtml(t_item.feature_id).replace(/'/g,'\\&#39;')}',${t_item.id})" title="${t('addTask')}">＋</span>
+          <span class="task-action-btn" onclick="event.stopPropagation();addTaskToFeature('${escJsSingle(t_item.feature_id)}',${t_item.id})" title="${t('addTask')}">＋</span>
           ${editBtn}${delBtn}
         </span>
       </div>
       <div class="task-children${collapsed ? ' hidden' : ''}">${kids.map(c => {
-        const cEditBtn = `<span class="task-action-btn" onclick="event.stopPropagation();editTaskAction(${c.id},'${escHtml(c.title).replace(/'/g,'\\&#39;')}')" title="${t('editTask')}">✎</span>`;
+        const cEditBtn = `<span class="task-action-btn" onclick="event.stopPropagation();editTaskAction(${c.id},'${escJsSingle(c.title)}')" title="${t('editTask')}">✎</span>`;
         const cDelBtn = `<span class="task-action-btn task-action-btn--danger" onclick="event.stopPropagation();deleteTaskAction(${c.id})" title="${t('deleteTask')}">✕</span>`;
         return `<div class="task-item ${TASK_STATUS_CLASSES[c.status] || ''}" data-id="${c.id}">
           <span class="task-checkbox" onclick="toggleTaskStatus(${c.id}, '${c.status}')">${c.status === 'completed' ? '☑' : c.status === 'skipped' ? '☒' : '☐'}</span>
@@ -967,10 +976,10 @@ async function loadTasks() {
     const grpStatus = done === total ? 'completed' : hasInProgress || done > 0 ? 'in_progress' : 'pending';
     const grpDate = items.reduce((min, i) => i.created_at < min ? i.created_at : min, items[0].created_at).slice(0, 10);
     const grpCollapsed = !window._expandedGroups.has(fid);
-    const addBtn = `<span class="task-action-btn" onclick="event.stopPropagation();addTaskToFeature('${escHtml(fid).replace(/'/g,'\\&#39;')}')" title="${t('addTask')}">＋</span>`;
-    const delGrpBtn = `<span class="task-action-btn task-action-btn--danger" onclick="event.stopPropagation();deleteFeatureGroupAction('${escHtml(fid).replace(/'/g,'\\&#39;')}')" title="${t('deleteFeatureGroup')}">✕</span>`;
+    const addBtn = `<span class="task-action-btn" onclick="event.stopPropagation();addTaskToFeature('${escJsSingle(fid)}')" title="${t('addTask')}">＋</span>`;
+    const delGrpBtn = `<span class="task-action-btn task-action-btn--danger" onclick="event.stopPropagation();deleteFeatureGroupAction('${escJsSingle(fid)}')" title="${t('deleteFeatureGroup')}">✕</span>`;
     html += `<div class="task-group">
-      <div class="task-group-header${grpCollapsed ? ' collapsed' : ''}" onclick="toggleGroupCollapse('${escHtml(fid).replace(/'/g,'\\&#39;')}')">
+      <div class="task-group-header${grpCollapsed ? ' collapsed' : ''}" onclick="toggleGroupCollapse('${escJsSingle(fid)}')">
         <span class="task-group-toggle">▼</span>
         <span class="task-group-title">${escHtml(formatFeatureId(fid))}</span>
         <span class="task-group-date">${grpDate}</span>
@@ -1358,7 +1367,7 @@ function loadProjects() {
     </div>`;
     const cards = data.projects.map((p, i) => `
       <div class="project-card" data-project="${escHtml(p.project_dir)}" style="animation-delay:${(i + 1) * 0.05}s">
-        <button class="project-card__delete" onclick="event.stopPropagation();deleteProject('${escHtml(p.project_dir)}','${escHtml(p.name)}')" title="${t('deleteProjectBtn')}">
+        <button class="project-card__delete" onclick="event.stopPropagation();deleteProject('${escJsSingle(p.project_dir)}','${escJsSingle(p.name)}')" title="${t('deleteProjectBtn')}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         </button>
         <div class="project-card__icon">${folderIcon}</div>
@@ -1439,10 +1448,10 @@ function browseDirs(path) {
     $('#add-project-path').value = data.path;
     $('#dir-browser-path').textContent = data.path;
     const parentPath = data.path.replace(/\/[^/]+\/?$/, '') || '/';
-    const items = [`<div class="dir-browser__item dir-browser__item--parent" onclick="browseDirs('${escHtml(parentPath)}')">⬆ ${t('parentDir')}</div>`];
+    const items = [`<div class="dir-browser__item dir-browser__item--parent" onclick="browseDirs('${escJsSingle(parentPath)}')">⬆ ${t('parentDir')}</div>`];
     data.dirs.forEach(d => {
       const full = data.path.replace(/\/$/, '') + '/' + d;
-      items.push(`<div class="dir-browser__item" onclick="event.stopPropagation();$('#add-project-path').value='${escHtml(full)}';browseDirs('${escHtml(full)}')">${escHtml(d)}</div>`);
+      items.push(`<div class="dir-browser__item" onclick="event.stopPropagation();$('#add-project-path').value='${escJsSingle(full)}';browseDirs('${escJsSingle(full)}')">${escHtml(d)}</div>`);
     });
     $('#dir-browser-list').innerHTML = items.join('');
   });

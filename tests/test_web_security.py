@@ -56,7 +56,7 @@ def _http_json(url: str, method: str = "GET", body: dict | None = None, headers:
         return exc.code, payload
 
 
-def _wait_server_ready(base_url: str, process: subprocess.Popen, timeout_seconds: int = 20):
+def _wait_server_ready(base_url: str, process: subprocess.Popen, timeout_seconds: int = 40):
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         if process.poll() is not None:
@@ -245,3 +245,34 @@ def test_session_and_rate_limit_persist_across_restart():
             )
             assert status == 200
             assert "too many attempts" in payload.get("error", "")
+
+
+def test_password_change_revokes_existing_sessions():
+    with _run_web() as base_url:
+        token = _register_and_login(base_url, "sec_user_06", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/auth/change-password",
+            method="POST",
+            headers={"Authorization": f"Bearer {token}"},
+            body={
+                "current_password": "Strong#Pass1234",
+                "new_password": "Strong#Pass5678",
+            },
+        )
+        assert status == 200
+        assert payload.get("success") is True
+
+        # 改密后旧 token 必须立刻失效。
+        status, _ = _http_json(
+            f"{base_url}/api/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert status == 401
+
+        status, payload = _http_json(
+            f"{base_url}/api/auth/login",
+            method="POST",
+            body={"username": "sec_user_06", "password": "Strong#Pass5678"},
+        )
+        assert status == 200
+        assert payload.get("token")

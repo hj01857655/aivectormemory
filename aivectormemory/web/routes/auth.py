@@ -242,5 +242,7 @@ def change_password(handler, cm, read_body):
 
     pw_hash, _ = _hash_password(new_pw)
     conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, row[0]))
+    # 密码变更后，吊销该用户所有已签发会话，避免旧 token 继续可用。
+    conn.execute("DELETE FROM auth_sessions WHERE username = ?", (username,))
     conn.commit()
     return {"success": True}
