@@ -416,6 +416,12 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 ## 📋 更新日志
 
+### v1.0.15
+
+- 🧪 修复 `tests/test_web_security.py` 跨平台清理逻辑：`taskkill` 仅在 Windows 执行，消除 Linux CI 的 `FileNotFoundError`
+- 🔢 版本对齐：同步升级包版本与运行时版本到 `1.0.15`（`pyproject.toml` + `aivectormemory.__version__`）
+- ✅ 修复后已在 GitHub Actions 重新通过质量门禁（`compileall + pytest`）
+
 ### v1.0.13
 
 - 🔐 新增项目级用户授权表 `user_project_access`，Web API 全面校验 `project_dir` 访问权限，修复跨用户越权访问

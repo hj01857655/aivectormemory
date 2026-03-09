@@ -436,6 +436,12 @@ Or add env to MCP config:
 
 ## 📋 Changelog
 
+### v1.0.15
+
+- 🧪 Fixed cross-platform teardown in `tests/test_web_security.py`: `taskkill` now runs only on Windows, eliminating Linux CI `FileNotFoundError`
+- 🔢 Version alignment: bumped package and runtime version to `1.0.15` (`pyproject.toml` + `aivectormemory.__version__`)
+- ✅ Re-validated release quality gate (`compileall + pytest`) in GitHub Actions after the fix
+
 ### v1.0.13
 
 - 🔐 Added per-user project authorization (`user_project_access`) and enforced project_dir access checks across web API routes
