@@ -16,9 +16,16 @@ def get_stats(cm, pdir, username: str | None = None):
     user_repo = UserMemoryRepo(cm.conn, username=username)
     issue_repo = IssueRepo(cm.conn, pdir)
 
-    proj_count = repo.count(project_dir=pdir)
+    if username:
+        allowed_projects = list_project_access(cm.conn, username)
+        proj_count = repo.count(project_dir=pdir) if normalize_project_dir(pdir) in allowed_projects else 0
+        project_total = sum(repo.count(project_dir=project) for project in allowed_projects)
+    else:
+        proj_count = repo.count(project_dir=pdir)
+        project_total = repo.count()
+
     user_count = user_repo.count()
-    total_count = repo.count() + user_count
+    total_count = project_total + user_count
 
     all_issues, _ = issue_repo.list_by_date()
     status_counts = {}

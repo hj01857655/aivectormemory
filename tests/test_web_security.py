@@ -502,6 +502,36 @@ def test_import_invalid_embedding_returns_structured_error():
 def test_user_scope_memories_are_isolated_between_users():
     with _run_web() as base_url:
         token_a = _register_and_login(base_url, "sec_user_14", "Strong#Pass1234")
+        private_project = "E:/VSCodeSpace/private-user-scope-01"
+        status, payload = _http_json(
+            f"{base_url}/api/projects",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={"project_dir": private_project},
+        )
+        assert status == 200, payload
+        assert payload.get("success") is True
+
+        status, payload = _http_json(
+            f"{base_url}/api/import",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={
+                "memories": [
+                    {
+                        "id": "sec_private_project_mem_01",
+                        "content": "project memory for user a only",
+                        "tags": ["project-private"],
+                        "scope": "project",
+                        "project_dir": private_project,
+                        "embedding": EMBEDDING_384,
+                    }
+                ]
+            },
+        )
+        assert status == 200, payload
+        assert payload.get("imported") == 1
+
         status, payload = _http_json(
             f"{base_url}/api/import",
             method="POST",
@@ -551,4 +581,6 @@ def test_user_scope_memories_are_isolated_between_users():
             headers={"Authorization": f"Bearer {token_b}"},
         )
         assert status == 200, payload
+        assert payload.get("memories", {}).get("project", -1) == 0
         assert payload.get("memories", {}).get("user", -1) == 0
+        assert payload.get("memories", {}).get("total", -1) == 0
