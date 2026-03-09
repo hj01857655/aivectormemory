@@ -414,6 +414,13 @@ export HF_ENDPOINT=https://hf-mirror.com
 
 ## 📋 更新日志
 
+### v1.0.12
+
+- 🩺 新增 `run doctor codex`：一键诊断 Codex MCP 配置与 stdio 探针链路（`initialize -> tools/list -> status -> auto_save`）
+- 🔁 新增 `run migrate-project --from --to`：项目目录重命名迁移，默认自动备份数据库，并自动合并 `session_state` 冲突
+- ✅ 新增 doctor/migrate 的验证测试，覆盖参数判定与迁移合并、dry-run 回滚行为
+- 🔧 统一运行时版本号：`aivectormemory.__version__` 与发布版本保持一致
+
 ### v1.0.11
 
 - 🔧 新增 Codex CLI 一次全局注册命令（`uvx -q --no-progress --from ... run --project-dir .`）

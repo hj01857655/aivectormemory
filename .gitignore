@@ -43,7 +43,6 @@ tests/screenshots/
 /*.png
 .playwright-mcp/
 
-# Local-only directories (specs, tests, design docs)
+# Local-only directories (specs, design docs)
 docs/design/
 docs/specs/
-tests/

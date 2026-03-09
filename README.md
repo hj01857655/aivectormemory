@@ -434,6 +434,13 @@ Or add env to MCP config:
 
 ## 📋 Changelog
 
+### v1.0.12
+
+- 🩺 Added `run doctor codex` for full Codex MCP diagnostics: config checks + stdio probe (`initialize -> tools/list -> status -> auto_save`)
+- 🔁 Added `run migrate-project --from --to` for safe project-dir migration with automatic DB backup and `session_state` conflict merge
+- ✅ Added verification tests for doctor transport rules and project migration merge/dry-run behavior
+- 🔧 Unified runtime version output: `aivectormemory.__version__` now aligned with package release version
+
 ### v1.0.11
 
 - 🔧 Added Codex CLI one-time global registration command (`uvx -q --no-progress --from ... run --project-dir .`)
