@@ -456,6 +456,9 @@ export HF_ENDPOINT=https://hf-mirror.com
   - 新增 `AIVM_VECTOR_BACKEND=qdrant` 后端开关
   - 记忆向量与归档问题向量支持 Qdrant 镜像写入 + 合并检索（Qdrant 优先，sqlite 兜底）
   - 新增向量后端回归测试覆盖
+- 🧪 测试临时目录治理：
+  - 将 pytest 默认 `basetemp` 固定为项目内 `.pytest_tmp`，避免系统 `%TEMP%` 下残留
+  - `.gitignore` 新增 `.pytest_tmp/` 与 `.tmp/`，减少测试临时目录造成的仓库噪音
 
 ### v1.0.15
 

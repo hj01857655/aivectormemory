@@ -476,6 +476,9 @@ Or add env to MCP config:
   - new `AIVM_VECTOR_BACKEND=qdrant` backend switch
   - memory vectors and archived issue vectors support Qdrant mirror + search merge (Qdrant-first, sqlite fallback)
   - added regression tests for vector backend integration
+- 🧪 Test temp-dir hygiene:
+  - pinned pytest `basetemp` to local workspace dir `.pytest_tmp` to avoid residue under system `%TEMP%`
+  - ignored `.pytest_tmp/` and `.tmp/` in `.gitignore` to prevent test scratch noise in git status
 
 ### v1.0.15
 
