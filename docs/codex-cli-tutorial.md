@@ -109,7 +109,45 @@ codex mcp get aivectormemory
 
 如果新会话两步都成功，通常就是上一会话连接已失效，不是服务端逻辑错误。
 
-## 6. 可选：切回本地源码模式
+## 6. 一键诊断（推荐）
+
+新增 `doctor codex` 子命令后，可直接做完整健康检查：
+
+```powershell
+run doctor codex
+```
+
+会检查：
+
+1. `codex mcp get` 是否可读
+2. `command/args` 是否符合推荐（`uvx -q --no-progress --from ... --project-dir .`）
+3. stdio 探针是否能完成 `initialize -> tools/list -> status -> auto_save`
+
+如果你只想检查配置，不跑探针：
+
+```powershell
+run doctor codex --no-probe
+```
+
+## 7. 项目重命名迁移（ace-lite -> ace）
+
+新增 `migrate-project` 子命令后，重命名可直接迁移分区数据：
+
+```powershell
+# 先演练，不落库
+run migrate-project --from E:/VSCodeSpace/ace-lite --to E:/VSCodeSpace/ace --dry-run
+
+# 再正式执行（默认自动备份数据库）
+run migrate-project --from E:/VSCodeSpace/ace-lite --to E:/VSCodeSpace/ace
+```
+
+默认行为：
+
+1. 自动备份 `~/.aivectormemory/memory.db`
+2. 迁移所有含 `project_dir` 的表
+3. `session_state` 若目标已存在会自动合并，避免唯一键冲突
+
+## 8. 可选：切回本地源码模式
 
 如果你在开发 AIVectorMemory 本身，希望改代码后立即生效，可改为本地源码运行：
 

@@ -283,6 +283,30 @@ run web --port 9080 --token your-server-token  # Optional hard gate for all API 
 
 Visit `http://localhost:9080` in your browser. If no account exists, register first, then log in.
 
+## 🧪 Doctor & Migration Commands
+
+```bash
+# Codex MCP doctor (config + stdio probe)
+run doctor codex
+
+# Config-only doctor
+run doctor codex --no-probe
+
+# Project rename migration (dry-run first)
+run migrate-project --from E:/VSCodeSpace/ace-lite --to E:/VSCodeSpace/ace --dry-run
+
+# Apply migration (auto backup by default)
+run migrate-project --from E:/VSCodeSpace/ace-lite --to E:/VSCodeSpace/ace
+```
+
+Notes:
+
+- `run doctor codex` verifies `codex mcp get`, recommended args
+  (`uvx -q --no-progress --from ... --project-dir .`), and probes
+  `initialize -> tools/list -> status -> auto_save`.
+- `run migrate-project` migrates all tables with `project_dir`; when
+  `session_state` conflicts, it auto-merges source and target rows.
+
 Security model (v1.0.11+ hardening):
 
 - All business APIs require `Authorization: Bearer <session_token>`

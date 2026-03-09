@@ -5,11 +5,14 @@ import sys
 
 def _ensure_utf8_stdio():
     """确保 stdin/stdout 使用 UTF-8 编码（Windows pipe 默认可能是 GBK/CP936）"""
-    if sys.stdin.encoding.lower().replace("-", "") != "utf8":
+    stdin_enc = (sys.stdin.encoding or "").lower().replace("-", "")
+    stdout_enc = (sys.stdout.encoding or "").lower().replace("-", "")
+    stderr_enc = (sys.stderr.encoding or "").lower().replace("-", "")
+    if stdin_enc != "utf8":
         sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8")
-    if sys.stdout.encoding.lower().replace("-", "") != "utf8":
+    if stdout_enc != "utf8":
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if sys.stderr.encoding.lower().replace("-", "") != "utf8":
+    if stderr_enc != "utf8":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 
@@ -33,6 +36,21 @@ def main():
     regen_parser = sub.add_parser("regenerate", help="切换语言并重新生成所有项目的规则文件")
     regen_parser.add_argument("--lang", required=True, help="目标语言 (zh-CN/zh-TW/en/es/de/fr/ja)")
 
+    doctor_parser = sub.add_parser("doctor", help="运行环境自检")
+    doctor_sub = doctor_parser.add_subparsers(dest="doctor_command")
+    doctor_codex = doctor_sub.add_parser("codex", help="检查 Codex CLI MCP 配置与连通性")
+    doctor_codex.add_argument("--server-name", default="aivectormemory", help="MCP 服务名，默认 aivectormemory")
+    doctor_codex.add_argument("--no-probe", action="store_true", default=False, help="仅检查 codex 配置，不做 stdio 探针")
+    doctor_codex.add_argument("--timeout", type=int, default=25, help="子进程超时秒数，默认 25")
+    doctor_codex.add_argument("--json", action="store_true", default=False, help="输出 JSON 报告")
+
+    migrate_parser = sub.add_parser("migrate-project", help="迁移项目目录（重命名场景）对应的分区数据")
+    migrate_parser.add_argument("--from", dest="from_dir", required=True, help="旧项目目录")
+    migrate_parser.add_argument("--to", dest="to_dir", required=True, help="新项目目录")
+    migrate_parser.add_argument("--dry-run", action="store_true", default=False, help="演练模式，不落库")
+    migrate_parser.add_argument("--no-backup", action="store_true", default=False, help="跳过自动备份（非 dry-run 时默认备份）")
+    migrate_parser.add_argument("--json", action="store_true", default=False, help="输出 JSON 报告")
+
     args = parser.parse_args()
 
     if args.command == "web":
@@ -46,6 +64,27 @@ def main():
     elif args.command == "regenerate":
         from aivectormemory.regenerate import run_regenerate
         run_regenerate(args.lang)
+    elif args.command == "doctor":
+        if args.doctor_command == "codex":
+            from aivectormemory.doctor import run_doctor_codex
+            rc = run_doctor_codex(
+                server_name=args.server_name,
+                no_probe=args.no_probe,
+                timeout_sec=args.timeout,
+                json_output=args.json,
+            )
+            raise SystemExit(rc)
+        parser.error("doctor 需要子命令，例如：doctor codex")
+    elif args.command == "migrate-project":
+        from aivectormemory.project_migration import run_migrate_project
+        rc = run_migrate_project(
+            source_dir=args.from_dir,
+            target_dir=args.to_dir,
+            dry_run=args.dry_run,
+            no_backup=args.no_backup,
+            json_output=args.json,
+        )
+        raise SystemExit(rc)
     else:
         from aivectormemory.server import run_server
         run_server(project_dir=args.project_dir)
