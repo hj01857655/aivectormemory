@@ -38,9 +38,14 @@ IDES = [
      None, None, None),
 ]
 
+def _uvx_stdio_runner(pdir: str) -> tuple[str, list[str]]:
+    # MCP stdio 启动要求 stdout 只输出 JSON-RPC，开启静默避免安装日志污染协议流。
+    return ("uvx", ["-q", "--no-progress", "--from", "aivectormemory@latest", "run", "--project-dir", pdir])
+
+
 RUNNERS = [
     ("python -m aivectormemory（pip/pipx 安装）", lambda pdir: (sys.executable, ["-m", "aivectormemory", "--project-dir", pdir])),
-    ("uvx aivectormemory（无需安装）", lambda pdir: ("uvx", ["aivectormemory@latest", "--project-dir", pdir])),
+    ("uvx 静默运行（无需安装）", _uvx_stdio_runner),
 ]
 
 
@@ -575,6 +580,9 @@ def run_install(project_dir: str | None = None):
     if runner_indices is None:
         runner_indices = [0]  # 默认 pip/pipx
     cmd, args = RUNNERS[runner_indices[0]][1](pdir)
+    if cmd == "run" and shutil.which("run") is None:
+        cmd, args = _uvx_stdio_runner(pdir)
+        print("  [WARN] 未检测到 run 命令，已自动切换到 uvx 静默模式")
     print(f"  -> {cmd} {' '.join(args)}\n")
 
     # 2. 选择语言

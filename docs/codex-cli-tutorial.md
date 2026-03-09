@@ -1,0 +1,98 @@
+# Codex CLI 使用教程（AIVectorMemory）
+
+本教程面向日常使用，目标是：
+
+- 只配置一次 MCP
+- 之后在任意项目目录直接使用
+- 让 AI 在会话里自动记住偏好、状态和问题记录
+
+## 1. 一次性配置（推荐）
+
+在 PowerShell 执行：
+
+```powershell
+codex mcp remove aivectormemory
+codex mcp add aivectormemory -- uvx -q --no-progress --from aivectormemory@latest run --project-dir .
+codex mcp get aivectormemory
+```
+
+看到 `args` 里包含 `--project-dir .`，表示配置成功。
+
+说明：
+
+- `uvx --from aivectormemory@latest`：使用远端包版本（非本地源码直跑）
+- `--project-dir .`：按当前目录动态分项目，不需要每个项目重配
+
+## 2. 日常使用流程
+
+每次进入一个项目：
+
+```powershell
+cd E:\VSCodeSpace\your-project
+codex
+```
+
+进入 Codex 后，让 AI 先调用启动检查：
+
+```text
+调用aivectormemory
+```
+
+默认会按顺序执行：
+
+1. `status`：读会话状态
+2. `recall(tags=["项目知识"], scope="project")`：读项目知识
+3. `recall(tags=["preference"], scope="user")`：读用户偏好
+
+## 3. 7 个工具何时用
+
+1. `status`：开场读取；任务进度变化时更新
+2. `remember`：出现明确经验/踩坑/约定时记录
+3. `recall`：开始前或遇到类似问题时检索历史
+4. `track`：问题生命周期管理（create/update/archive/list）
+5. `digest`：阶段总结或周报前汇总记忆
+6. `forget`：删除错误或过期记忆
+7. `auto_save`：每轮对话结束前保存决策/修改/踩坑/待办/偏好
+
+## 4. 常用检查命令
+
+```powershell
+codex mcp list
+codex mcp get aivectormemory
+```
+
+关注点：
+
+- `enabled: true`
+- `command: uvx`
+- `args` 包含 `--project-dir .`
+
+## 5. 常见问题
+
+### Q1：每个项目都要重新 `mcp add` 吗？
+
+不用。只有以下情况才需要重配一次：
+
+- 你执行了 `codex mcp remove aivectormemory`
+- 你把参数改回了固定目录
+- Codex 全局配置被重置
+
+### Q2：`remove: codex mcp remove aivectormemory` 是已经删除了吗？
+
+不是。那只是提示可执行的删除命令，配置仍在。
+
+### Q3：为什么有时看起来不是当前项目？
+
+如果配置是固定目录（例如 `--project-dir E:/xxx`），记忆会写入固定项目分区。  
+改成 `--project-dir .` 后会按启动目录动态分区。
+
+## 6. 可选：切回本地源码模式
+
+如果你在开发 AIVectorMemory 本身，希望改代码后立即生效，可改为本地源码运行：
+
+```powershell
+codex mcp remove aivectormemory
+codex mcp add aivectormemory -- uv run --project E:/VSCodeSpace/aivectormemory python -m aivectormemory --project-dir .
+```
+
+生产日常使用建议仍保留远端包模式（更稳定）。

@@ -122,10 +122,11 @@ No `pip install` needed, run directly:
 
 ```bash
 cd /path/to/your/project
-uvx aivectormemory install
+uvx --from aivectormemory@latest run install
 ```
 
 > Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) to be installed. `uvx` auto-downloads and runs the package — no manual installation needed.
+> 对 MCP stdio 场景，建议使用 `uvx -q --no-progress --from ...`，避免安装输出污染协议流。
 
 ### Option 3: Codex CLI quick setup
 
@@ -163,6 +164,10 @@ run install          # choose Codex CLI in the interactive installer
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
 </details>
+
+## 📘 Tutorial
+
+- [Codex CLI tutorial (single setup, dynamic project dir)](docs/codex-cli-tutorial.md)
 
 ## 🛠️ 8 MCP Tools
 
@@ -244,6 +249,25 @@ extra_tags   (string[])  Additional tags
 ```
 
 Auto-extracts and stores user preferences at end of each conversation, smart dedup.
+
+### `auto_save` 调用时机与触发链
+
+`auto_save` 不是服务端定时任务，也不会在 `run` 启动后自动执行；只有客户端主动发起 MCP
+`tools/call(name="auto_save")` 时才会调用。
+
+触发链如下：
+
+1. 启动 `run --project-dir <dir>` 进入 MCP Server 模式。
+2. 客户端先完成 `initialize` / `tools/list`。
+3. 客户端在需要保存时发送 `tools/call`，其中 `name="auto_save"`。
+4. 服务端根据 `TOOL_HANDLERS` 路由到 `handle_auto_save`，执行入库与去重。
+
+对应实现位置：
+
+- `aivectormemory/__main__.py`：`run` 分支启动 `run_server(...)`
+- `aivectormemory/server.py`：`tools/call` 分发到具体工具 handler
+- `aivectormemory/tools/__init__.py`：`"auto_save": handle_auto_save`
+- `aivectormemory/tools/auto_save.py`：`handle_auto_save` 具体逻辑
 
 ## 📊 Web Dashboard
 
