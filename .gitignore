@@ -33,6 +33,7 @@ Thumbs.db
 
 # Test cache
 .pytest_cache/
+.pytest_tmp/
 htmlcov/
 .coverage
 
@@ -49,3 +50,4 @@ docs/specs/
 
 # Local audit scratch
 .tmp_audit/
+.tmp/

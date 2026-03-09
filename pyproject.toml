@@ -49,4 +49,5 @@ packages = ["aivectormemory"]
 include = ["aivectormemory/", "scripts/", "README.md", "LICENSE", "NOTICE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
+addopts = "--basetemp=.pytest_tmp"
 testpaths = ["tests"]
