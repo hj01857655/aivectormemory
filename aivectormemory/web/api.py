@@ -43,11 +43,11 @@ def handle_api_request(handler, cm):
         if path.startswith("/api/memories/") and len(path.split("/")) == 4:
             mid = path.split("/")[3]
             if method == "GET":
-                return _json_response(handler, memories.get_memory_detail(cm, mid, pdir))
+                return _json_response(handler, memories.get_memory_detail(cm, mid, pdir, username=username))
             elif method == "PUT":
-                return _json_response(handler, memories.put_memory(handler, cm, mid, pdir))
+                return _json_response(handler, memories.put_memory(handler, cm, mid, pdir, username=username))
             elif method == "DELETE":
-                return _json_response(handler, memories.delete_memory(cm, mid, pdir))
+                return _json_response(handler, memories.delete_memory(cm, mid, pdir, username=username))
 
         if path.startswith("/api/projects/") and method == "DELETE":
             proj_dir = unquote("/".join(path.split("/")[3:]))
@@ -100,8 +100,8 @@ def handle_api_request(handler, cm):
                 "/api/status": lambda: _get_status(cm, pdir),
                 "/api/issues": lambda: issues.get_issues(cm, params, pdir),
                 "/api/tasks": lambda: tasks.get_tasks(cm, params, pdir),
-                "/api/stats": lambda: projects.get_stats(cm, pdir),
-                "/api/tags": lambda: tags.get_tags(cm, params, pdir),
+                "/api/stats": lambda: projects.get_stats(cm, pdir, username=username),
+                "/api/tags": lambda: tags.get_tags(cm, params, pdir, username=username),
                 "/api/projects": lambda: projects.get_projects(cm, username=username),
                 "/api/export": lambda: memories.export_memories(cm, params, pdir, username=username),
                 "/api/browse": lambda: projects.browse_directory(params),
@@ -112,7 +112,7 @@ def handle_api_request(handler, cm):
             },
             "POST": {
                 "/api/import": lambda: memories.import_memories(handler, cm, pdir, username=username),
-                "/api/search": lambda: memories.search_memories(handler, cm, pdir),
+                "/api/search": lambda: memories.search_memories(handler, cm, pdir, username=username),
                 "/api/projects": lambda: projects.add_project(handler, cm, username=username),
                 "/api/issues": lambda: issues.post_issue(handler, cm, pdir),
                 "/api/tasks": lambda: tasks.post_tasks(handler, cm, pdir),
@@ -122,12 +122,12 @@ def handle_api_request(handler, cm):
             },
             "PUT": {
                 "/api/status": lambda: _put_status(handler, cm, pdir),
-                "/api/tags/rename": lambda: tags.rename_tag(handler, cm, pdir),
-                "/api/tags/merge": lambda: tags.merge_tags(handler, cm, pdir),
+                "/api/tags/rename": lambda: tags.rename_tag(handler, cm, pdir, username=username),
+                "/api/tags/merge": lambda: tags.merge_tags(handler, cm, pdir, username=username),
             },
             "DELETE": {
-                "/api/memories": lambda: memories.delete_memories_batch(handler, cm, pdir),
-                "/api/tags/delete": lambda: tags.delete_tags(handler, cm, pdir),
+                "/api/memories": lambda: memories.delete_memories_batch(handler, cm, pdir, username=username),
+                "/api/tags/delete": lambda: tags.delete_tags(handler, cm, pdir, username=username),
             },
         }
 

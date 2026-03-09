@@ -45,6 +45,10 @@ def _accessible_project_memories(repo: MemoryRepo, pdir: str, username: str | No
     return rows
 
 
+def _user_repo(conn, username: str | None) -> UserMemoryRepo:
+    return UserMemoryRepo(conn, username=username)
+
+
 def get_memories(cm, params, pdir, username: str | None = None):
     scope = params.get("scope", ["all"])[0]
     query = params.get("query", [None])[0]
@@ -55,7 +59,7 @@ def get_memories(cm, params, pdir, username: str | None = None):
     offset = int(params.get("offset", [0])[0])
 
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
 
     if tag:
         if scope == "user":
@@ -128,17 +132,17 @@ def get_memories(cm, params, pdir, username: str | None = None):
     return {"memories": results, "total": total}
 
 
-def get_memory_detail(cm, mid, pdir):
+def get_memory_detail(cm, mid, pdir, username: str | None = None):
     repo = MemoryRepo(cm.conn, pdir)
     mem = repo.get_by_id(mid)
     if mem and _same_project(mem, pdir):
         return mem
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
     mem = user_repo.get_by_id(mid)
     return mem or {"error": "not found"}
 
 
-def put_memory(handler, cm, mid, pdir):
+def put_memory(handler, cm, mid, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     repo = MemoryRepo(cm.conn, pdir)
@@ -147,7 +151,7 @@ def put_memory(handler, cm, mid, pdir):
         mem = None
     table = "memories"
     if not mem:
-        user_repo = UserMemoryRepo(cm.conn)
+        user_repo = _user_repo(cm.conn, username)
         mem = user_repo.get_by_id(mid)
         table = "user_memories"
     if not mem:
@@ -161,31 +165,38 @@ def put_memory(handler, cm, mid, pdir):
     if updates:
         updates["updated_at"] = now
         set_clause = ",".join(f"{k}=?" for k in updates)
-        cm.conn.execute(f"UPDATE {safe_table(table)} SET {set_clause} WHERE id=?", [*updates.values(), mid])
+        if table == "user_memories":
+            current_username = (username or "").strip()
+            cm.conn.execute(
+                f"UPDATE {safe_table(table)} SET {set_clause} WHERE id=? AND username=?",
+                [*updates.values(), mid, current_username],
+            )
+        else:
+            cm.conn.execute(f"UPDATE {safe_table(table)} SET {set_clause} WHERE id=?", [*updates.values(), mid])
         cm.conn.commit()
     if table == "user_memories":
-        return UserMemoryRepo(cm.conn).get_by_id(mid)
+        return _user_repo(cm.conn, username).get_by_id(mid)
     return repo.get_by_id(mid)
 
 
-def delete_memory(cm, mid, pdir):
+def delete_memory(cm, mid, pdir, username: str | None = None):
     repo = MemoryRepo(cm.conn, pdir)
     mem = repo.get_by_id(mid)
     if mem and _same_project(mem, pdir):
         if repo.delete(mid):
             return {"deleted": True, "id": mid}
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
     if user_repo.delete(mid):
         return {"deleted": True, "id": mid}
     return {"error": "not found"}
 
 
-def delete_memories_batch(handler, cm, pdir):
+def delete_memories_batch(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     ids = body.get("ids", [])
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
     deleted = []
     for mid in ids:
         mem = repo.get_by_id(mid)
@@ -199,7 +210,7 @@ def delete_memories_batch(handler, cm, pdir):
 def export_memories(cm, params, pdir, username: str | None = None):
     scope = params.get("scope", ["all"])[0]
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
 
     if scope == "user":
         memories = user_repo.get_all(limit=999999)
@@ -244,7 +255,6 @@ def import_memories(handler, cm, pdir, username: str | None = None):
     if not isinstance(items, list) or not items:
         return {"error": "no memories to import"}
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
     imported, skipped = 0, 0
     errors = []
     for idx, item in enumerate(items):
@@ -255,7 +265,8 @@ def import_memories(handler, cm, pdir, username: str | None = None):
                 continue
 
             mid = item.get("id", "")
-            if not mid or repo.get_by_id(mid) or user_repo.get_by_id(mid):
+            global_user_exists = cm.conn.execute("SELECT 1 FROM user_memories WHERE id=?", (mid,)).fetchone()
+            if not mid or repo.get_by_id(mid) or global_user_exists:
                 skipped += 1
                 continue
 
@@ -301,9 +312,10 @@ def import_memories(handler, cm, pdir, username: str | None = None):
 
             if scope == "user":
                 cm.conn.execute(
-                    "INSERT INTO user_memories (id, content, tags, source, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                    "INSERT INTO user_memories (id, username, content, tags, source, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
                     (
                         mid,
+                        (username or "").strip(),
                         item.get("content", ""),
                         tags_str,
                         item.get("source", "manual"),
@@ -339,7 +351,7 @@ def import_memories(handler, cm, pdir, username: str | None = None):
     return result
 
 
-def search_memories(handler, cm, pdir):
+def search_memories(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     query = body.get("query", "").strip()
@@ -355,7 +367,7 @@ def search_memories(handler, cm, pdir):
 
     embedding = engine.encode(query)
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = _user_repo(cm.conn, username)
 
     if scope == "user":
         if tags:

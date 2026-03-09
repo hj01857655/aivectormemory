@@ -449,6 +449,9 @@ export HF_ENDPOINT=https://hf-mirror.com
   - 修复 `/api/import` 可写入无权限 `project_dir` 的越权问题
   - 增加 embedding 输入校验与结构化错误返回
   - 增加 API 级异常兜底，避免连接异常中断
+- 👤 user scope 隔离加固：
+  - `user_memories` 新增 `username` 分区字段（schema v12 迁移）
+  - web `memories/search/tags/stats` 的 user scope 查询按登录用户名隔离
 - 🧩 新增可选 Qdrant 集成模式：
   - 新增 `AIVM_VECTOR_BACKEND=qdrant` 后端开关
   - 记忆向量与归档问题向量支持 Qdrant 镜像写入 + 合并检索（Qdrant 优先，sqlite 兜底）

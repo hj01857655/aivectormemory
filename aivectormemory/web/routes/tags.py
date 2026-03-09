@@ -12,10 +12,10 @@ def _merged_ids_with_tag(mem_repo, user_repo, tag, pdir):
     return proj + [m for m in user if m["id"] not in seen]
 
 
-def get_tags(cm, params, pdir):
+def get_tags(cm, params, pdir, username: str | None = None):
     query = params.get("query", [None])[0]
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = UserMemoryRepo(cm.conn, username=username)
     proj = repo.get_tag_counts(project_dir=pdir)
     user = user_repo.get_tag_counts()
     all_names = sorted(set(proj) | set(user), key=lambda k: -(proj.get(k, 0) + user.get(k, 0)))
@@ -27,7 +27,7 @@ def get_tags(cm, params, pdir):
     return {"tags": tags, "total": len(tags)}
 
 
-def rename_tag(handler, cm, pdir):
+def rename_tag(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     old_name = body.get("old_name", "")
@@ -35,7 +35,7 @@ def rename_tag(handler, cm, pdir):
     if not old_name or not new_name:
         return {"error": "old_name and new_name required"}
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = UserMemoryRepo(cm.conn, username=username)
     updated = 0
     for m in _merged_ids_with_tag(repo, user_repo, old_name, pdir):
         tags = json.loads(m["tags"]) if isinstance(m.get("tags"), str) else m.get("tags", [])
@@ -49,7 +49,7 @@ def rename_tag(handler, cm, pdir):
     return {"updated": updated, "old_name": old_name, "new_name": new_name}
 
 
-def merge_tags(handler, cm, pdir):
+def merge_tags(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     source_tags = body.get("source_tags", [])
@@ -57,7 +57,7 @@ def merge_tags(handler, cm, pdir):
     if not source_tags or not target_name:
         return {"error": "source_tags and target_name required"}
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = UserMemoryRepo(cm.conn, username=username)
     updated = 0
     seen = set()
     for src in source_tags:
@@ -76,14 +76,14 @@ def merge_tags(handler, cm, pdir):
     return {"updated": updated, "target_name": target_name}
 
 
-def delete_tags(handler, cm, pdir):
+def delete_tags(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     tag_names = body.get("tags", [])
     if not tag_names:
         return {"error": "tags required"}
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = UserMemoryRepo(cm.conn, username=username)
     updated = 0
     seen = set()
     for tn in tag_names:

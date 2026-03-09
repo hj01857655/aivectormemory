@@ -497,3 +497,58 @@ def test_import_invalid_embedding_returns_structured_error():
         errors = payload.get("errors") or []
         assert errors
         assert "invalid embedding" in errors[0].get("error", "")
+
+
+def test_user_scope_memories_are_isolated_between_users():
+    with _run_web() as base_url:
+        token_a = _register_and_login(base_url, "sec_user_14", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/import",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={
+                "memories": [
+                    {
+                        "id": "sec_user_scope_mem_01",
+                        "content": "user a private preference",
+                        "tags": ["preference"],
+                        "scope": "user",
+                        "embedding": EMBEDDING_384,
+                    }
+                ]
+            },
+        )
+        assert status == 200, payload
+        assert payload.get("imported") == 1
+
+        status, payload = _http_json(
+            f"{base_url}/api/memories?scope=user&limit=50",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert status == 200, payload
+        ids = {m.get("id") for m in payload.get("memories", [])}
+        assert "sec_user_scope_mem_01" in ids
+
+        token_b = _register_and_login(base_url, "sec_user_15", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/memories?scope=user&limit=50",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        ids = {m.get("id") for m in payload.get("memories", [])}
+        assert "sec_user_scope_mem_01" not in ids
+
+        status, payload = _http_json(
+            f"{base_url}/api/memories?scope=all&limit=50",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        ids = {m.get("id") for m in payload.get("memories", [])}
+        assert "sec_user_scope_mem_01" not in ids
+
+        status, payload = _http_json(
+            f"{base_url}/api/stats",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        assert payload.get("memories", {}).get("user", -1) == 0

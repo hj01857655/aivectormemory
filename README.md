@@ -469,6 +469,9 @@ Or add env to MCP config:
   - blocked unauthorized `project_dir` writes in `/api/import`
   - added embedding payload validation and structured error responses
   - added API-level exception fallback to prevent abrupt disconnects
+- 👤 User-scope isolation hardening:
+  - `user_memories` now includes `username` partition key (schema v12 migration)
+  - web `memories/search/tags/stats` user-scope queries are isolated by authenticated username
 - 🧩 Added optional Qdrant integration mode:
   - new `AIVM_VECTOR_BACKEND=qdrant` backend switch
   - memory vectors and archived issue vectors support Qdrant mirror + search merge (Qdrant-first, sqlite fallback)

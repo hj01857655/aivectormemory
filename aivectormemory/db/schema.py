@@ -95,6 +95,7 @@ INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_tasks_feature ON tasks(feature_id)",
     "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
     "CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source)",
+    "CREATE INDEX IF NOT EXISTS idx_user_memories_username ON user_memories(username)",
     "CREATE INDEX IF NOT EXISTS idx_user_memories_tags ON user_memories(tags)",
     "CREATE INDEX IF NOT EXISTS idx_tasks_archive_project ON tasks_archive(project_dir)",
     "CREATE INDEX IF NOT EXISTS idx_tasks_archive_feature ON tasks_archive(feature_id)",
@@ -123,6 +124,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 USER_MEMORIES_TABLE = """
 CREATE TABLE IF NOT EXISTS user_memories (
     id TEXT PRIMARY KEY,
+    username TEXT NOT NULL DEFAULT '',
     content TEXT NOT NULL,
     tags TEXT NOT NULL DEFAULT '[]',
     source TEXT NOT NULL DEFAULT 'manual',
@@ -210,7 +212,7 @@ CREATE TABLE IF NOT EXISTS user_project_access (
 
 ALL_TABLES = [SCHEMA_VERSION_TABLE, MEMORIES_TABLE, VEC_MEMORIES_TABLE, SESSION_STATE_TABLE, ISSUES_TABLE, ISSUES_ARCHIVE_TABLE, TASKS_TABLE, USER_MEMORIES_TABLE, VEC_USER_MEMORIES_TABLE, VEC_ISSUES_ARCHIVE_TABLE, TASKS_ARCHIVE_TABLE, MEMORY_TAGS_TABLE, USER_MEMORY_TAGS_TABLE, USERS_TABLE, AUTH_SESSIONS_TABLE, AUTH_LOGIN_LIMITS_TABLE, USER_PROJECT_ACCESS_TABLE]
 
-CURRENT_SCHEMA_VERSION = 11
+CURRENT_SCHEMA_VERSION = 12
 
 
 def _get_schema_version(conn) -> int:

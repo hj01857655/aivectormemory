@@ -11,9 +11,9 @@ from aivectormemory.web.routes.access import (
 )
 
 
-def get_stats(cm, pdir):
+def get_stats(cm, pdir, username: str | None = None):
     repo = MemoryRepo(cm.conn, pdir)
-    user_repo = UserMemoryRepo(cm.conn)
+    user_repo = UserMemoryRepo(cm.conn, username=username)
     issue_repo = IssueRepo(cm.conn, pdir)
 
     proj_count = repo.count(project_dir=pdir)
@@ -87,7 +87,7 @@ def get_projects(cm, username=None):
             tags = json.loads(r["tags"]) if isinstance(r["tags"], str) else (r["tags"] or [])
             projects[pd]["tags"].update(tags)
 
-    user_repo = UserMemoryRepo(conn)
+    user_repo = UserMemoryRepo(conn, username=username)
     user_tag_counts = user_repo.get_tag_counts()
     user_tags = set(user_tag_counts.keys())
     user_count = user_repo.count()
