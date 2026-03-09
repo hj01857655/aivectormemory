@@ -22,6 +22,9 @@ codex mcp get aivectormemory
 
 - `uvx --from aivectormemory@latest`：使用远端包版本（非本地源码直跑）
 - `--project-dir .`：按当前目录动态分项目，不需要每个项目重配
+- `-q --no-progress`：避免安装输出干扰 MCP stdio 通道
+
+> 2026-03-09 实测：以上配置可在 Codex 中正常调用 `status` 与 `auto_save`。
 
 ## 2. 日常使用流程
 
@@ -44,15 +47,16 @@ codex
 2. `recall(tags=["项目知识"], scope="project")`：读项目知识
 3. `recall(tags=["preference"], scope="user")`：读用户偏好
 
-## 3. 7 个工具何时用
+## 3. 8 个工具何时用
 
 1. `status`：开场读取；任务进度变化时更新
 2. `remember`：出现明确经验/踩坑/约定时记录
 3. `recall`：开始前或遇到类似问题时检索历史
 4. `track`：问题生命周期管理（create/update/archive/list）
-5. `digest`：阶段总结或周报前汇总记忆
-6. `forget`：删除错误或过期记忆
-7. `auto_save`：每轮对话结束前保存决策/修改/踩坑/待办/偏好
+5. `task`：任务拆解与任务状态联动
+6. `readme`：按工具定义/依赖自动生成 README 片段
+7. `forget`：删除错误或过期记忆
+8. `auto_save`：每轮对话结束前保存偏好
 
 ## 4. 常用检查命令
 
@@ -66,6 +70,8 @@ codex mcp get aivectormemory
 - `enabled: true`
 - `command: uvx`
 - `args` 包含 `--project-dir .`
+- `Status` 显示 `enabled`
+- `Auth` 显示 `Unsupported` 属于正常现象（stdio MCP 不走 OAuth）
 
 ## 5. 常见问题
 
@@ -85,6 +91,23 @@ codex mcp get aivectormemory
 
 如果配置是固定目录（例如 `--project-dir E:/xxx`），记忆会写入固定项目分区。  
 改成 `--project-dir .` 后会按启动目录动态分区。
+
+### Q4：出现 `Transport closed` 怎么办？
+
+按下面顺序排查：
+
+1. 先确认配置是 quiet uvx：
+   ```powershell
+   codex mcp get aivectormemory --json
+   ```
+   重点看 `command=uvx`，`args` 里有 `-q --no-progress --from ... run --project-dir .`。
+2. 完全退出当前 Codex 会话，重新 `codex` 启动新会话（避免旧连接残留）。
+3. 新会话里先让 AI 只调用一次：
+   - `status`
+4. 再调用：
+   - `auto_save`
+
+如果新会话两步都成功，通常就是上一会话连接已失效，不是服务端逻辑错误。
 
 ## 6. 可选：切回本地源码模式
 
