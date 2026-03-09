@@ -46,3 +46,6 @@ tests/screenshots/
 # Local-only directories (specs, design docs)
 docs/design/
 docs/specs/
+
+# Local audit scratch
+.tmp_audit/
