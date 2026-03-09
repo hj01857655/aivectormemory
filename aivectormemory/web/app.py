@@ -72,7 +72,7 @@ class WebHandler(SimpleHTTPRequestHandler):
             self.send_error(401, "Unauthorized: missing bearer token")
             return False
 
-        username = verify_token(session_token)
+        username = verify_token(session_token, self.cm.conn)
         if not username:
             self.send_error(401, "Unauthorized: invalid or expired token")
             return False

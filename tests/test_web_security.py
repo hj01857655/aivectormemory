@@ -1,11 +1,11 @@
 import json
-import shutil
+import os
 import socket
 import subprocess
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from urllib import error, request
 
@@ -13,6 +13,17 @@ import pytest
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+def _python_for_web() -> str:
+    candidates = [
+        ROOT_DIR / ".venv" / "Scripts" / "python.exe",
+        ROOT_DIR / ".venv" / "bin" / "python",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
 
 
 def _free_port() -> int:
@@ -60,21 +71,19 @@ def _wait_server_ready(base_url: str, process: subprocess.Popen, timeout_seconds
 
 
 @contextmanager
-def _run_web(token: str | None = None):
+def _run_web(token: str | None = None, project_dir: str | None = None, db_dir: str | None = None):
     port = _free_port()
-    uv_bin = shutil.which("uv")
-    if not uv_bin:
-        pytest.skip("uv command not found; skip web integration security tests")
-    with tempfile.TemporaryDirectory(prefix="avm-sec-test-") as project_dir:
+    with ExitStack() as stack:
+        local_project_dir = project_dir or stack.enter_context(tempfile.TemporaryDirectory(prefix="avm-sec-test-proj-"))
+        local_db_dir = db_dir or stack.enter_context(tempfile.TemporaryDirectory(prefix="avm-sec-test-db-"))
+        python_bin = _python_for_web()
         cmd = [
-            uv_bin,
-            "run",
-            "python",
+            python_bin,
             "-m",
             "aivectormemory",
             "web",
             "--project-dir",
-            project_dir,
+            local_project_dir,
             "--port",
             str(port),
             "--bind",
@@ -83,12 +92,15 @@ def _run_web(token: str | None = None):
         ]
         if token:
             cmd.extend(["--token", token])
+        env = os.environ.copy()
+        env["AIVM_DB_DIR"] = local_db_dir
         process = subprocess.Popen(
             cmd,
             cwd=ROOT_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=env,
         )
         base_url = f"http://127.0.0.1:{port}"
         try:
@@ -101,6 +113,15 @@ def _run_web(token: str | None = None):
                     process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     process.kill()
+            # uv on Windows may leave child processes alive; force kill the full tree to release DB file locks.
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            time.sleep(0.2)
 
 
 def _register_and_login(base_url: str, username: str, password: str, extra_headers: dict | None = None) -> str:
@@ -194,3 +215,33 @@ def test_password_policy_and_rate_limit():
         )
         assert status == 200
         assert "too many attempts" in payload.get("error", "")
+
+
+def test_session_and_rate_limit_persist_across_restart():
+    with tempfile.TemporaryDirectory(prefix="avm-sec-shared-proj-") as project_dir, tempfile.TemporaryDirectory(prefix="avm-sec-shared-db-") as db_dir:
+        with _run_web(project_dir=project_dir, db_dir=db_dir) as base_url:
+            token = _register_and_login(base_url, "sec_user_05", "Strong#Pass1234")
+            for _ in range(5):
+                status, payload = _http_json(
+                    f"{base_url}/api/auth/login",
+                    method="POST",
+                    body={"username": "sec_user_05", "password": "Wrong#Pass1234"},
+                )
+                assert status == 200
+                assert "error" in payload
+
+        with _run_web(project_dir=project_dir, db_dir=db_dir) as base_url:
+            status, payload = _http_json(
+                f"{base_url}/api/projects",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            assert status == 200
+            assert "projects" in payload
+
+            status, payload = _http_json(
+                f"{base_url}/api/auth/login",
+                method="POST",
+                body={"username": "sec_user_05", "password": "Wrong#Pass1234"},
+            )
+            assert status == 200
+            assert "too many attempts" in payload.get("error", "")

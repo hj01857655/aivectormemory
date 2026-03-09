@@ -6,10 +6,6 @@ import re
 import time
 from datetime import datetime
 
-# In-memory session store: {token: {"username": str, "created_at": float}}
-_sessions: dict[str, dict] = {}
-_failed_logins: dict[str, dict] = {}
-
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 SESSION_TTL_SECONDS = 12 * 60 * 60
 MAX_LOGIN_ATTEMPTS = 5
@@ -60,39 +56,63 @@ def _login_key(username: str, ip: str) -> str:
     return f"{ip}:{username.lower()}"
 
 
-def _prune_failed_logins(now_ts: float):
-    stale_keys = []
-    for key, entry in _failed_logins.items():
-        lock_until = entry.get("lock_until", 0)
-        window_start = entry.get("window_start", 0)
-        if lock_until < now_ts and (now_ts - window_start) > RATE_WINDOW_SECONDS:
-            stale_keys.append(key)
-    for key in stale_keys:
-        _failed_logins.pop(key, None)
+def _prune_auth_state(conn, now_ts: float):
+    conn.execute("DELETE FROM auth_sessions WHERE expires_at <= ?", (now_ts,))
+    conn.execute(
+        """
+        DELETE FROM auth_login_limits
+        WHERE lock_until < ? AND (? - window_start) > ?
+        """,
+        (now_ts, now_ts, RATE_WINDOW_SECONDS),
+    )
 
 
-def _is_locked(key: str, now_ts: float) -> int:
-    entry = _failed_logins.get(key)
-    if not entry:
+def _is_locked(conn, key: str, now_ts: float) -> int:
+    row = conn.execute(
+        "SELECT lock_until FROM auth_login_limits WHERE login_key = ?",
+        (key,),
+    ).fetchone()
+    if not row:
         return 0
-    lock_until = int(entry.get("lock_until", 0))
+    lock_until = int(row["lock_until"])
     if lock_until > now_ts:
         return lock_until - int(now_ts)
     return 0
 
 
-def _record_failed_login(key: str, now_ts: float):
-    entry = _failed_logins.get(key)
-    if not entry or (now_ts - entry.get("window_start", 0)) > RATE_WINDOW_SECONDS:
-        entry = {"window_start": now_ts, "count": 0, "lock_until": 0}
-    entry["count"] = int(entry.get("count", 0)) + 1
-    if entry["count"] >= MAX_LOGIN_ATTEMPTS:
-        entry["lock_until"] = int(now_ts + LOCKOUT_SECONDS)
-    _failed_logins[key] = entry
+def _record_failed_login(conn, key: str, now_ts: float):
+    row = conn.execute(
+        """
+        SELECT window_start, attempt_count
+        FROM auth_login_limits
+        WHERE login_key = ?
+        """,
+        (key,),
+    ).fetchone()
+    if not row or (now_ts - float(row["window_start"])) > RATE_WINDOW_SECONDS:
+        window_start = now_ts
+        attempt_count = 0
+    else:
+        window_start = float(row["window_start"])
+        attempt_count = int(row["attempt_count"])
+    attempt_count += 1
+    lock_until = int(now_ts + LOCKOUT_SECONDS) if attempt_count >= MAX_LOGIN_ATTEMPTS else 0
+    conn.execute(
+        """
+        INSERT INTO auth_login_limits (login_key, window_start, attempt_count, lock_until, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(login_key) DO UPDATE SET
+            window_start = excluded.window_start,
+            attempt_count = excluded.attempt_count,
+            lock_until = excluded.lock_until,
+            updated_at = excluded.updated_at
+        """,
+        (key, window_start, attempt_count, lock_until, now_ts),
+    )
 
 
-def _clear_failed_login(key: str):
-    _failed_logins.pop(key, None)
+def _clear_failed_login(conn, key: str):
+    conn.execute("DELETE FROM auth_login_limits WHERE login_key = ?", (key,))
 
 
 def register(handler, cm, read_body):
@@ -131,29 +151,32 @@ def login(handler, cm, read_body):
     if not username or not password:
         return {"error": "username and password required"}
 
+    conn = cm.conn
     now_ts = time.time()
-    _prune_failed_logins(now_ts)
+    _prune_auth_state(conn, now_ts)
     login_key = _login_key(username, _client_ip(handler))
-    retry_after = _is_locked(login_key, now_ts)
+    retry_after = _is_locked(conn, login_key, now_ts)
     if retry_after > 0:
         return {"error": f"too many attempts, retry in {retry_after}s"}
 
-    conn = cm.conn
     row = conn.execute(
         "SELECT id, password_hash FROM users WHERE username = ?", (username,)
     ).fetchone()
 
     if not row or not _verify_password(password, row[1]):
-        _record_failed_login(login_key, now_ts)
+        _record_failed_login(conn, login_key, now_ts)
+        conn.commit()
         return {"error": "invalid username or password"}
 
-    _clear_failed_login(login_key)
+    _clear_failed_login(conn, login_key)
     token = _generate_token()
-    _sessions[token] = {
-        "username": username,
-        "created_at": now_ts,
-        "expires_at": now_ts + SESSION_TTL_SECONDS,
-    }
+    conn.execute(
+        """
+        INSERT INTO auth_sessions (token, username, created_at, expires_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (token, username, now_ts, now_ts + SESSION_TTL_SECONDS),
+    )
 
     conn.execute(
         "UPDATE users SET last_login = ? WHERE id = ?",
@@ -164,24 +187,29 @@ def login(handler, cm, read_body):
     return {"token": token, "username": username, "expires_in": SESSION_TTL_SECONDS}
 
 
-def logout(handler):
+def logout(handler, cm):
     token = getattr(handler, "auth_session_token", None)
     if token:
-        _sessions.pop(token, None)
+        cm.conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+        cm.conn.commit()
     return {"success": True}
 
 
-def verify_token(token: str) -> str | None:
+def verify_token(token: str, conn) -> str | None:
     """Return username if token is valid, else None."""
     now_ts = time.time()
-    session = _sessions.get(token)
-    if not session:
+    row = conn.execute(
+        "SELECT username, expires_at FROM auth_sessions WHERE token = ?",
+        (token,),
+    ).fetchone()
+    if not row:
         return None
-    expires_at = float(session.get("expires_at", 0))
+    expires_at = float(row["expires_at"])
     if expires_at <= now_ts:
-        _sessions.pop(token, None)
+        conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+        conn.commit()
         return None
-    return session["username"]
+    return row["username"]
 
 
 def get_current_user(handler):

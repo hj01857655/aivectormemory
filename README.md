@@ -288,6 +288,7 @@ Security model (v1.0.11+ hardening):
 - All business APIs require `Authorization: Bearer <session_token>`
 - If `--token` is enabled, all API requests must also include `X-AVM-Server-Token: <server-token>`
 - `/api/auth/register` and `/api/auth/login` are the only public auth endpoints
+- Session tokens and login rate-limit lock state are persisted in SQLite (still enforced after process restart)
 
 - Multi-project switching, memory browse/search/edit/delete/export/import
 - Semantic search (vector similarity matching)

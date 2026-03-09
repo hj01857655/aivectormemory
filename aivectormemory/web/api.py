@@ -23,7 +23,7 @@ def handle_api_request(handler, cm):
     auth_routes = {
         "/api/auth/register": lambda: auth.register(handler, cm, _read_body),
         "/api/auth/login": lambda: auth.login(handler, cm, _read_body),
-        "/api/auth/logout": lambda: auth.logout(handler),
+        "/api/auth/logout": lambda: auth.logout(handler, cm),
         "/api/auth/change-password": lambda: auth.change_password(handler, cm, _read_body),
     }
     if method == "POST" and path in auth_routes:
