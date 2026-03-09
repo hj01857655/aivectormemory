@@ -1,38 +1,75 @@
+import os
 import sys
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from aivectormemory.db import ConnectionManager, init_db
 from aivectormemory.web.api import handle_api_request
+from aivectormemory.log import log
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 
 class NoFQDNHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
     def server_bind(self):
+        import socket
+        if self.allow_reuse_address:
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(self.server_address)
         self.server_address = self.socket.getsockname()
 
 
 class WebHandler(SimpleHTTPRequestHandler):
     cm = None
+    auth_token = None
+    quiet = False
 
     def address_string(self):
         return self.client_address[0]
 
+    def _check_auth(self):
+        if not self.auth_token:
+            return True
+        from urllib.parse import urlparse, parse_qs
+        params = parse_qs(urlparse(self.path).query)
+        return params.get("token", [None])[0] == self.auth_token
+
+    def _is_auth_route(self):
+        return self.path.split("?")[0].startswith("/api/auth/")
+
     def do_GET(self):
         if self.path.startswith("/api/"):
+            if not self._is_auth_route() and not self._check_auth():
+                self.send_error(403, "Forbidden: invalid token")
+                return
             handle_api_request(self, self.cm)
         else:
             self._serve_static()
 
     def do_PUT(self):
         if self.path.startswith("/api/"):
+            if not self._check_auth():
+                self.send_error(403, "Forbidden: invalid token")
+                return
             handle_api_request(self, self.cm)
         else:
             self.send_error(405)
 
     def do_DELETE(self):
         if self.path.startswith("/api/"):
+            if not self._check_auth():
+                self.send_error(403, "Forbidden: invalid token")
+                return
+            handle_api_request(self, self.cm)
+        else:
+            self.send_error(405)
+
+    def do_POST(self):
+        if self.path.startswith("/api/"):
+            if not self._is_auth_route() and not self._check_auth():
+                self.send_error(403, "Forbidden: invalid token")
+                return
             handle_api_request(self, self.cm)
         else:
             self.send_error(405)
@@ -60,16 +97,48 @@ class WebHandler(SimpleHTTPRequestHandler):
         self.wfile.write(content)
 
     def log_message(self, format, *args):
-        print(f"[aivectormemory-web] {args[0]}", file=sys.stderr)
+        if self.quiet:
+            return
+        log.debug("%s", args[0])
 
 
-def run_web(project_dir: str | None = None, port: int = 9080):
+def run_web(project_dir: str | None = None, port: int = 9080, bind: str = "127.0.0.1", token: str | None = None, quiet: bool = False, daemon: bool = False):
     cm = ConnectionManager(project_dir=project_dir)
     init_db(cm.conn)
-    WebHandler.cm = cm
 
-    server = NoFQDNHTTPServer(("0.0.0.0", port), WebHandler)
-    print(f"[aivectormemory] Web dashboard: http://localhost:{port}", file=sys.stderr)
+    try:
+        from aivectormemory.embedding.engine import EmbeddingEngine
+        engine = EmbeddingEngine()
+        engine.load()
+        cm._embedding_engine = engine
+        log.info("Semantic search enabled")
+    except Exception as e:
+        cm._embedding_engine = None
+        log.warning("Semantic search disabled: %s", e)
+
+    WebHandler.cm = cm
+    WebHandler.auth_token = token
+    WebHandler.quiet = quiet
+
+    server = NoFQDNHTTPServer((bind, port), WebHandler)
+    log.info("Web dashboard: http://%s:%d", bind, port)
+    if token:
+        log.info("Token auth enabled")
+
+    if daemon:
+        if not hasattr(os, "fork"):
+            log.error("--daemon not supported on Windows")
+            sys.exit(1)
+        pid = os.fork()
+        if pid > 0:
+            log.info("Running in background (PID %d)", pid)
+            sys.exit(0)
+        os.setsid()
+        sys.stdin.close()
+        devnull = open(os.devnull, "w")
+        sys.stdout = devnull
+        sys.stderr = devnull
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

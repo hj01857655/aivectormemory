@@ -1,10 +1,15 @@
-from aivectormemory.config import USER_SCOPE_DIR
+SCHEMA_VERSION_TABLE = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER NOT NULL DEFAULT 0
+)"""
+
 MEMORIES_TABLE = """
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     content TEXT NOT NULL,
     tags TEXT NOT NULL DEFAULT '[]',
     scope TEXT NOT NULL DEFAULT 'project',
+    source TEXT NOT NULL DEFAULT 'manual',
     project_dir TEXT NOT NULL DEFAULT '',
     session_id INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
@@ -41,6 +46,15 @@ CREATE TABLE IF NOT EXISTS issues (
     title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
     content TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    investigation TEXT NOT NULL DEFAULT '',
+    root_cause TEXT NOT NULL DEFAULT '',
+    solution TEXT NOT NULL DEFAULT '',
+    files_changed TEXT NOT NULL DEFAULT '[]',
+    test_result TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    feature_id TEXT NOT NULL DEFAULT '',
+    parent_id INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 )"""
@@ -53,6 +67,17 @@ CREATE TABLE IF NOT EXISTS issues_archive (
     date TEXT NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    investigation TEXT NOT NULL DEFAULT '',
+    root_cause TEXT NOT NULL DEFAULT '',
+    solution TEXT NOT NULL DEFAULT '',
+    files_changed TEXT NOT NULL DEFAULT '[]',
+    test_result TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    feature_id TEXT NOT NULL DEFAULT '',
+    parent_id INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT '',
+    original_issue_id INTEGER NOT NULL DEFAULT 0,
     archived_at TEXT NOT NULL,
     created_at TEXT NOT NULL
 )"""
@@ -60,43 +85,135 @@ CREATE TABLE IF NOT EXISTS issues_archive (
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_dir)",
     "CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_tags ON memories(tags)",
     "CREATE INDEX IF NOT EXISTS idx_issues_date ON issues(date)",
     "CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status)",
     "CREATE INDEX IF NOT EXISTS idx_issues_project ON issues(project_dir)",
     "CREATE INDEX IF NOT EXISTS idx_issues_archive_project ON issues_archive(project_dir)",
     "CREATE INDEX IF NOT EXISTS idx_issues_archive_date ON issues_archive(date)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_dir)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_feature ON tasks(feature_id)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_source ON memories(source)",
+    "CREATE INDEX IF NOT EXISTS idx_user_memories_tags ON user_memories(tags)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_archive_project ON tasks_archive(project_dir)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_archive_feature ON tasks_archive(feature_id)",
+    "CREATE INDEX IF NOT EXISTS idx_memory_tags_tag ON memory_tags(tag)",
+    "CREATE INDEX IF NOT EXISTS idx_user_memory_tags_tag ON user_memory_tags(tag)",
 ]
 
-ALL_TABLES = [MEMORIES_TABLE, VEC_MEMORIES_TABLE, SESSION_STATE_TABLE, ISSUES_TABLE, ISSUES_ARCHIVE_TABLE]
+TASKS_TABLE = """
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_dir TEXT NOT NULL DEFAULT '',
+    feature_id TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    parent_id INTEGER NOT NULL DEFAULT 0,
+    task_type TEXT NOT NULL DEFAULT 'manual',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)"""
+
+USER_MEMORIES_TABLE = """
+CREATE TABLE IF NOT EXISTS user_memories (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '[]',
+    source TEXT NOT NULL DEFAULT 'manual',
+    session_id INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)"""
+
+VEC_USER_MEMORIES_TABLE = """
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_user_memories USING vec0(
+    id TEXT PRIMARY KEY,
+    embedding FLOAT[384]
+)"""
+
+VEC_ISSUES_ARCHIVE_TABLE = """
+CREATE VIRTUAL TABLE IF NOT EXISTS vec_issues_archive USING vec0(
+    id INTEGER PRIMARY KEY,
+    embedding FLOAT[384]
+)"""
+
+TASKS_ARCHIVE_TABLE = """
+CREATE TABLE IF NOT EXISTS tasks_archive (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_dir TEXT NOT NULL DEFAULT '',
+    feature_id TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    parent_id INTEGER NOT NULL DEFAULT 0,
+    task_type TEXT NOT NULL DEFAULT 'manual',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    original_task_id INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)"""
+
+MEMORY_TAGS_TABLE = """
+CREATE TABLE IF NOT EXISTS memory_tags (
+    memory_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (memory_id, tag)
+)"""
+
+USER_MEMORY_TAGS_TABLE = """
+CREATE TABLE IF NOT EXISTS user_memory_tags (
+    memory_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (memory_id, tag)
+)"""
+
+USERS_TABLE = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_login TEXT
+)"""
+
+ALL_TABLES = [SCHEMA_VERSION_TABLE, MEMORIES_TABLE, VEC_MEMORIES_TABLE, SESSION_STATE_TABLE, ISSUES_TABLE, ISSUES_ARCHIVE_TABLE, TASKS_TABLE, USER_MEMORIES_TABLE, VEC_USER_MEMORIES_TABLE, VEC_ISSUES_ARCHIVE_TABLE, TASKS_ARCHIVE_TABLE, MEMORY_TAGS_TABLE, USER_MEMORY_TAGS_TABLE, USERS_TABLE]
+
+CURRENT_SCHEMA_VERSION = 10
 
 
-def init_db(conn):
+def _get_schema_version(conn) -> int:
+    row = conn.execute("SELECT version FROM schema_version").fetchone()
+    if row:
+        return row[0] if isinstance(row, tuple) else row["version"]
+    conn.execute("INSERT INTO schema_version (version) VALUES (0)")
+    conn.commit()
+    return 0
+
+
+def _set_schema_version(conn, version: int):
+    conn.execute("UPDATE schema_version SET version=?", (version,))
+
+
+def init_db(conn, engine=None):
     for sql in ALL_TABLES:
         conn.execute(sql)
-    # 迁移：旧版 memories 表可能缺少 project_dir 列
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(memories)").fetchall()}
-    if "project_dir" not in cols:
-        conn.execute("ALTER TABLE memories ADD COLUMN project_dir TEXT NOT NULL DEFAULT ''")
-    # 迁移：旧版 issues 表中 archived 记录移到 issues_archive
-    issue_cols = {row[1] for row in conn.execute("PRAGMA table_info(issues)").fetchall()}
-    if "archive_content" in issue_cols:
-        rows = conn.execute("SELECT * FROM issues WHERE status IN ('archived', 'migrated')").fetchall()
-        for r in rows:
-            conn.execute(
-                "INSERT INTO issues_archive (project_dir, issue_number, date, title, content, archived_at, created_at) VALUES (?,?,?,?,?,?,?)",
-                (r["project_dir"], r["issue_number"], r["date"], r["title"], r["content"], r["updated_at"], r["created_at"])
-            )
-            conn.execute("DELETE FROM issues WHERE id=?", (r["id"],))
-        # 重建 issues 表去掉废弃字段
-        conn.execute("CREATE TABLE IF NOT EXISTS issues_new (id INTEGER PRIMARY KEY AUTOINCREMENT, project_dir TEXT NOT NULL DEFAULT '', issue_number INTEGER NOT NULL, date TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', content TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
-        conn.execute("INSERT INTO issues_new SELECT id, project_dir, issue_number, date, title, status, content, created_at, updated_at FROM issues")
-        conn.execute("DROP TABLE issues")
-        conn.execute("ALTER TABLE issues_new RENAME TO issues")
+
+    ver = _get_schema_version(conn)
+
+    if ver < CURRENT_SCHEMA_VERSION:
+        from .migrations import MIGRATIONS
+        for ver_num in range(ver + 1, CURRENT_SCHEMA_VERSION + 1):
+            fn = MIGRATIONS.get(ver_num)
+            if fn:
+                fn(conn, engine=engine)
+
     for sql in INDEXES:
         conn.execute(sql)
-    # 迁移：user scope 记忆的 project_dir 从空字符串改为 @user@
-    conn.execute(
-        "UPDATE memories SET project_dir=? WHERE project_dir='' AND scope='user'",
-        (USER_SCOPE_DIR,)
-    )
+
+    if ver < CURRENT_SCHEMA_VERSION:
+        _set_schema_version(conn, CURRENT_SCHEMA_VERSION)
     conn.commit()

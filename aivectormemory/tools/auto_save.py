@@ -1,37 +1,30 @@
-import json
 from aivectormemory.config import DEDUP_THRESHOLD
-from aivectormemory.db.memory_repo import MemoryRepo
-from aivectormemory.errors import success_response
-
-CATEGORY_TAG_MAP = {
-    "decisions": "decision",
-    "modifications": "modification",
-    "pitfalls": "pitfall",
-    "todos": "todo",
-    "preferences": "preference",
-}
-
-CATEGORY_SCOPE_OVERRIDE = {
-    "preferences": "user",
-}
+from aivectormemory.db.user_memory_repo import UserMemoryRepo
+from aivectormemory.i18n.responses import fmt
+from aivectormemory.tools.keywords import extract_keywords
 
 
 def handle_auto_save(args, *, cm, engine, session_id, **_):
-    scope = args.get("scope", "project")
-    repo = MemoryRepo(cm.conn, cm.project_dir)
-    saved = []
+    items = args.get("preferences", [])
+    if not items or not isinstance(items, list):
+        return fmt("auto_save.empty")
 
-    for category, tag in CATEGORY_TAG_MAP.items():
-        items = args.get(category, [])
-        if not isinstance(items, list):
-            continue
-        cat_scope = CATEGORY_SCOPE_OVERRIDE.get(category, scope)
+    repo = UserMemoryRepo(cm.conn)
+    saved = []
+    with cm.transaction():
         for item in items:
             if not item or not isinstance(item, str):
                 continue
+            item = item[:5000] if len(item) > 5000 else item
             embedding = engine.encode(item)
-            tags = [tag] + args.get("extra_tags", [])
-            result = repo.insert(item, tags, cat_scope, session_id, embedding, DEDUP_THRESHOLD)
-            saved.append({"id": result["id"], "action": result["action"], "category": category})
+            tags = ["preference"] + args.get("extra_tags", [])
+            # 自动从 item 提取关键词补充到 tags
+            existing = {t.lower() for t in tags}
+            for kw in extract_keywords(item):
+                if kw.lower() not in existing:
+                    tags.append(kw)
+                    existing.add(kw.lower())
+            result = repo.insert(item, tags, session_id, embedding, DEDUP_THRESHOLD, source="auto_save")
+            saved.append({"id": result["id"], "action": result["action"], "category": "preferences"})
 
-    return json.dumps(success_response(saved=saved, count=len(saved)))
+    return fmt("auto_save", count=len(saved))

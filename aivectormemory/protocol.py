@@ -1,16 +1,24 @@
 import json
 import sys
+from aivectormemory.log import log
 
 
 def read_message() -> dict | None:
     line = sys.stdin.readline()
     if not line:
         return None
-    return json.loads(line.strip())
+    line = line.strip()
+    if not line:
+        return read_message()
+    try:
+        return json.loads(line)
+    except json.JSONDecodeError:
+        log.warning("Skipped non-JSON input: %s", line[:120])
+        return read_message()
 
 
 def write_message(msg: dict):
-    sys.stdout.write(json.dumps(msg) + "\n")
+    sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
     sys.stdout.flush()
 
 
