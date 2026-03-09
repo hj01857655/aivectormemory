@@ -22,7 +22,7 @@ def main():
     web_parser = sub.add_parser("web", help="启动 Web 看板")
     web_parser.add_argument("--port", type=int, default=9080, help="Web 看板端口")
     web_parser.add_argument("--bind", default="127.0.0.1", help="绑定地址，默认 127.0.0.1")
-    web_parser.add_argument("--token", default=None, help="API 认证 token，启用后所有 API 请求需带 ?token=xxx")
+    web_parser.add_argument("--token", default=None, help="API 保护 token，启用后所有 API 请求需带 X-AVM-Server-Token 请求头")
     web_parser.add_argument("--quiet", action="store_true", default=False, help="屏蔽请求日志")
     web_parser.add_argument("--daemon", action="store_true", default=False, help="后台运行（macOS/Linux）")
     web_parser.add_argument("--project-dir", dest="web_project_dir", default=None)

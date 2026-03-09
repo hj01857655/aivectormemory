@@ -23,13 +23,13 @@ def handle_api_request(handler, cm):
     auth_routes = {
         "/api/auth/register": lambda: auth.register(handler, cm, _read_body),
         "/api/auth/login": lambda: auth.login(handler, cm, _read_body),
-        "/api/auth/logout": lambda: auth.logout(handler, _read_body),
+        "/api/auth/logout": lambda: auth.logout(handler),
         "/api/auth/change-password": lambda: auth.change_password(handler, cm, _read_body),
     }
     if method == "POST" and path in auth_routes:
         return _json_response(handler, auth_routes[path]())
     if method == "GET" and path == "/api/auth/me":
-        return _json_response(handler, auth.get_current_user(params))
+        return _json_response(handler, auth.get_current_user(handler))
 
     # --- 资源 ID 路由 ---
     if path.startswith("/api/memories/") and len(path.split("/")) == 4:

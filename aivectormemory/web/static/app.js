@@ -18,14 +18,45 @@ const $$ = s => document.querySelectorAll(s);
 })();
 
 let currentProject = null;
+const queryParams = new URLSearchParams(window.location.search);
+const bootstrapServerToken = (queryParams.get('server_token') || queryParams.get('token') || '').trim();
+if (bootstrapServerToken) {
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('token');
+  cleanUrl.searchParams.delete('server_token');
+  history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+}
+
+let serverToken = bootstrapServerToken;
+let authToken = localStorage.getItem('avm-token') || '';
+
+function buildAuthHeaders(withSession = true) {
+  const headers = {};
+  if (serverToken) headers['X-AVM-Server-Token'] = serverToken;
+  if (withSession && authToken) headers.Authorization = `Bearer ${authToken}`;
+  return headers;
+}
 
 const api = (path, opts = {}) => {
+  const { skipProject = false, withSession = true, headers: extraHeaders = {}, body, ...rest } = opts;
   const sep = path.includes('?') ? '&' : '?';
-  const url = currentProject !== null ? `/api/${path}${sep}project=${encodeURIComponent(currentProject)}` : `/api/${path}`;
+  const url = (!skipProject && currentProject !== null)
+    ? `/api/${path}${sep}project=${encodeURIComponent(currentProject)}`
+    : `/api/${path}`;
+
+  let payload = body;
+  const headers = { ...buildAuthHeaders(withSession), ...extraHeaders };
+  if (payload !== undefined && !(payload instanceof FormData)) {
+    if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    if ((headers['Content-Type'] || '').includes('application/json') && typeof payload !== 'string') {
+      payload = JSON.stringify(payload);
+    }
+  }
+
   return fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    ...rest,
+    headers,
+    body: payload,
   }).then(r => r.json());
 };
 
@@ -1164,9 +1195,9 @@ async function loadSettings() {
 
   // Fetch data in parallel
   const [healthRes, statsRes, backupsRes] = await Promise.all([
-    fetch('/api/maintenance/health').then(r => r.json()).catch(() => null),
-    fetch('/api/maintenance/stats').then(r => r.json()).catch(() => null),
-    fetch('/api/maintenance/backups').then(r => r.json()).catch(() => ({ backups: [] })),
+    api('maintenance/health', { skipProject: true }).catch(() => null),
+    api('maintenance/stats', { skipProject: true }).catch(() => null),
+    api('maintenance/backups', { skipProject: true }).catch(() => ({ backups: [] })),
   ]);
 
   const h = healthRes || {};
@@ -1231,7 +1262,7 @@ async function loadSettings() {
       <div class="settings-card">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
           <div class="avatar">${username ? username.charAt(0).toUpperCase() : 'U'}</div>
-          <div><div style="font-weight: 500;">${username || 'User'}</div><div style="font-size: 12px; color: var(--text-muted);">${s.db_path || ''}</div></div>
+          <div><div style="font-weight: 500;">${escHtml(username || 'User')}</div><div style="font-size: 12px; color: var(--text-muted);">${escHtml(s.db_path || '')}</div></div>
         </div>
         <div style="margin-bottom: 16px;">
           <div style="font-weight: 500; margin-bottom: 8px;">${t('changePassword')}</div>
@@ -1251,20 +1282,25 @@ async function loadSettings() {
 }
 
 async function doRepairWeb() {
-  const res = await fetch('/api/maintenance/repair', { method: 'POST' }).then(r => r.json());
+  const res = await api('maintenance/repair', { method: 'POST', skipProject: true });
   if (res.error) return toast(res.error, 'error');
   toast(t('repairSuccess') || 'Repair completed: ' + (res.orphans_deleted || 0) + ' orphans deleted', 'success');
   loadSettings();
 }
 
 async function doBackupWeb() {
-  const res = await fetch('/api/maintenance/backup', { method: 'POST' }).then(r => r.json());
+  const res = await api('maintenance/backup', { method: 'POST', skipProject: true });
   if (res.error) return toast(res.error, 'error');
   toast(t('backupSuccess') || 'Backup created: ' + res.name, 'success');
   loadSettings();
 }
 
-function doLogoutWeb() {
+async function doLogoutWeb() {
+  try {
+    await api('auth/logout', { method: 'POST', skipProject: true });
+  } catch {
+    // Ignore network errors during logout cleanup.
+  }
   authToken = '';
   localStorage.removeItem('avm-token');
   localStorage.removeItem('avm-username');
@@ -1276,13 +1312,12 @@ async function doChangePassword() {
   const np = $('#new-password').value;
   const cnp = $('#confirm-new-password').value;
   if (!cur || !np) return toast(t('auth.fieldsRequired'), 'error');
-  if (np.length < 6) return toast(t('auth.passwordTooShort'), 'error');
   if (np !== cnp) return toast(t('auth.passwordMismatch'), 'error');
-  const res = await fetch('/api/auth/change-password', {
+  const res = await api('auth/change-password', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: authToken, current_password: cur, new_password: np })
-  }).then(r => r.json());
+    skipProject: true,
+    body: { current_password: cur, new_password: np },
+  });
   if (res.error) return toast(t('passwordChangeFailed') + ': ' + res.error, 'error');
   toast(t('passwordChanged'), 'success');
   $('#current-password').value = '';
@@ -1315,7 +1350,7 @@ window._reloadCurrentView = () => {
 const folderIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
 
 function loadProjects() {
-  fetch('/api/projects').then(r => r.json()).then(data => {
+  api('projects', { skipProject: true }).then(data => {
     const grid = $('#project-grid');
     const addCard = `<div class="project-card project-card--add" onclick="showAddProjectModal()" style="animation-delay:0s">
       <div class="project-card__icon project-card__icon--add"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
@@ -1390,14 +1425,14 @@ function showAddProjectModal() {
   showModal(t('addProjectTitle'), html, () => {
     const path = $('#add-project-path').value.trim();
     if (!path) return toast(t('pathRequired'), 'error');
-    fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_dir: path }) })
-      .then(r => r.json()).then(d => { if (d.success) { hideModal(); toast(t('addProjectSuccess'), 'success'); toast(t('addProjectInstallHint'), 'info'); loadProjects(); } });
+    api('projects', { method: 'POST', skipProject: true, body: { project_dir: path } })
+      .then(d => { if (d.success) { hideModal(); toast(t('addProjectSuccess'), 'success'); toast(t('addProjectInstallHint'), 'info'); loadProjects(); } });
   });
 }
 
 function browseDirs(path) {
-  const url = path ? `/api/browse?path=${encodeURIComponent(path)}` : '/api/browse';
-  fetch(url).then(r => r.json()).then(data => {
+  const endpoint = path ? `browse?path=${encodeURIComponent(path)}` : 'browse';
+  api(endpoint, { skipProject: true }).then(data => {
     if (data.error) return;
     const browser = $('#dir-browser');
     browser.classList.remove('hidden');
@@ -1417,8 +1452,7 @@ window.browseDirs = browseDirs;
 
 window.deleteProject = function(projectDir, name) {
   showConfirm(t('confirmDeleteProject').replace('{name}', name), () => {
-    fetch('/api/projects/' + encodeURIComponent(projectDir), { method: 'DELETE' })
-      .then(r => r.json())
+    api('projects/' + encodeURIComponent(projectDir), { method: 'DELETE', skipProject: true })
       .then(d => { if (d.success) loadProjects(); else toast(d.error || 'Failed', 'error'); });
   });
 };
@@ -1459,7 +1493,6 @@ $('#import-file')?.addEventListener('change', async (e) => {
 
 // ============== Auth ==============
 
-let authToken = localStorage.getItem('avm-token') || '';
 let authMode = 'login'; // 'login' | 'register'
 
 function showAuthPage() {
@@ -1506,17 +1539,17 @@ $('#auth-form').addEventListener('submit', async (e) => {
   }
 
   if (authMode === 'register') {
-    if (password.length < 6) {
-      errEl.textContent = t('auth.passwordTooShort');
-      errEl.style.display = '';
-      return;
-    }
     if (password !== $('#auth-confirm-password').value) {
       errEl.textContent = t('auth.passwordMismatch');
       errEl.style.display = '';
       return;
     }
-    const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) }).then(r => r.json());
+    const res = await api('auth/register', {
+      method: 'POST',
+      skipProject: true,
+      withSession: false,
+      body: { username, password },
+    });
     if (res.error) {
       errEl.textContent = res.error;
       errEl.style.display = '';
@@ -1524,7 +1557,12 @@ $('#auth-form').addEventListener('submit', async (e) => {
     }
   }
 
-  const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) }).then(r => r.json());
+  const res = await api('auth/login', {
+    method: 'POST',
+    skipProject: true,
+    withSession: false,
+    body: { username, password },
+  });
   if (res.error) {
     errEl.textContent = res.error;
     errEl.style.display = '';
@@ -1557,14 +1595,31 @@ function updateSidebarUser(username) {
 
 function updateProjectSelectUser(username) {
   const el = $('#project-select-user');
-  if (!el || !username) return;
-  el.innerHTML = `<div class="avatar">${username.charAt(0).toUpperCase()}</div><span>${username}</span><button class="btn btn--ghost-danger" onclick="doLogoutWeb()">${t('auth.logout')}</button>`;
+  if (!el) return;
+  el.textContent = '';
+  if (!username) return;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = username.charAt(0).toUpperCase();
+
+  const name = document.createElement('span');
+  name.textContent = username;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn btn--ghost-danger';
+  btn.textContent = t('auth.logout');
+  btn.addEventListener('click', () => { doLogoutWeb(); });
+
+  el.appendChild(avatar);
+  el.appendChild(name);
+  el.appendChild(btn);
 }
 
 async function checkAuth() {
   if (!authToken) return showAuthPage();
   try {
-    const res = await fetch(`/api/auth/me?token=${encodeURIComponent(authToken)}`).then(r => r.json());
+    const res = await api('auth/me', { skipProject: true });
     if (res.error) {
       authToken = '';
       localStorage.removeItem('avm-token');
