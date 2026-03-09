@@ -278,9 +278,16 @@ Auto-extracts and stores user preferences at end of each conversation, smart ded
 run web --port 9080
 run web --port 9080 --quiet          # Suppress request logs
 run web --port 9080 --quiet --daemon  # Run in background (macOS/Linux)
+run web --port 9080 --token your-server-token  # Optional hard gate for all API requests
 ```
 
-Visit `http://localhost:9080` in your browser. Default username `admin`, password `admin123` (can be changed in settings after first login).
+Visit `http://localhost:9080` in your browser. If no account exists, register first, then log in.
+
+Security model (v1.0.11+ hardening):
+
+- All business APIs require `Authorization: Bearer <session_token>`
+- If `--token` is enabled, all API requests must also include `X-AVM-Server-Token: <server-token>`
+- `/api/auth/register` and `/api/auth/login` are the only public auth endpoints
 
 - Multi-project switching, memory browse/search/edit/delete/export/import
 - Semantic search (vector similarity matching)

@@ -260,9 +260,16 @@ extra_tags   (string[])  额外标签
 run web --port 9080
 run web --port 9080 --quiet          # 屏蔽请求日志
 run web --port 9080 --quiet --daemon  # 后台运行（macOS/Linux）
+run web --port 9080 --token your-server-token  # 可选：给所有 API 再加一层服务端令牌校验
 ```
 
-浏览器访问 `http://localhost:9080`，默认用户名 `admin`，密码 `admin123`（首次登录后可在设置中修改）。
+浏览器访问 `http://localhost:9080`。如果当前没有账号，请先注册后登录。
+
+安全模型（v1.0.11+ 加固）：
+
+- 所有业务 API 必须携带 `Authorization: Bearer <session_token>`
+- 如启用 `--token`，所有 API 还必须携带 `X-AVM-Server-Token: <server-token>`
+- 仅 `/api/auth/register` 与 `/api/auth/login` 可在未登录状态访问
 
 - 多项目切换，记忆浏览/搜索/编辑/删除/导出/导入
 - 语义搜索（向量相似度匹配）
