@@ -28,6 +28,7 @@ def main():
     web_parser.add_argument("--token", default=None, help="API 保护 token，启用后所有 API 请求需带 X-AVM-Server-Token 请求头")
     web_parser.add_argument("--quiet", action="store_true", default=False, help="屏蔽请求日志")
     web_parser.add_argument("--daemon", action="store_true", default=False, help="后台运行（macOS/Linux）")
+    web_parser.add_argument("--allow-insecure-public-bind", action="store_true", default=False, help="允许无 token 绑定非回环地址（不安全）")
     web_parser.add_argument("--project-dir", dest="web_project_dir", default=None)
 
     install_parser = sub.add_parser("install", help="为当前项目配置 MCP")
@@ -56,7 +57,15 @@ def main():
     if args.command == "web":
         project_dir = args.web_project_dir or args.project_dir
         from aivectormemory.web.app import run_web
-        run_web(project_dir=project_dir, port=args.port, bind=args.bind, token=args.token, quiet=args.quiet, daemon=args.daemon)
+        run_web(
+            project_dir=project_dir,
+            port=args.port,
+            bind=args.bind,
+            token=args.token,
+            quiet=args.quiet,
+            daemon=args.daemon,
+            allow_insecure_public_bind=args.allow_insecure_public_bind,
+        )
     elif args.command == "install":
         project_dir = args.install_project_dir or args.project_dir
         from aivectormemory.install import run_install

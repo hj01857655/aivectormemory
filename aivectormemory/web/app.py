@@ -15,6 +15,11 @@ PUBLIC_AUTH_ROUTES = {
 }
 
 
+def _is_loopback_bind(bind: str) -> bool:
+    host = (bind or "").strip().lower()
+    return host in {"127.0.0.1", "localhost", "::1"}
+
+
 class NoFQDNHTTPServer(HTTPServer):
     allow_reuse_address = True
 
@@ -148,19 +153,37 @@ class WebHandler(SimpleHTTPRequestHandler):
         log.debug("%s", args[0])
 
 
-def run_web(project_dir: str | None = None, port: int = 9080, bind: str = "127.0.0.1", token: str | None = None, quiet: bool = False, daemon: bool = False):
+def run_web(
+    project_dir: str | None = None,
+    port: int = 9080,
+    bind: str = "127.0.0.1",
+    token: str | None = None,
+    quiet: bool = False,
+    daemon: bool = False,
+    allow_insecure_public_bind: bool = False,
+):
+    if not _is_loopback_bind(bind) and not token and not allow_insecure_public_bind:
+        raise RuntimeError(
+            "Refusing non-loopback bind without server token. "
+            "Use --token <secret> or explicitly pass --allow-insecure-public-bind."
+        )
+
     cm = ConnectionManager(project_dir=project_dir)
     init_db(cm.conn)
 
-    try:
-        from aivectormemory.embedding.engine import EmbeddingEngine
-        engine = EmbeddingEngine()
-        engine.load()
-        cm._embedding_engine = engine
-        log.info("Semantic search enabled")
-    except Exception as e:
+    if os.getenv("AIVM_DISABLE_EMBEDDING", "0") == "1":
         cm._embedding_engine = None
-        log.warning("Semantic search disabled: %s", e)
+        log.info("Semantic search disabled by AIVM_DISABLE_EMBEDDING=1")
+    else:
+        try:
+            from aivectormemory.embedding.engine import EmbeddingEngine
+            engine = EmbeddingEngine()
+            engine.load()
+            cm._embedding_engine = engine
+            log.info("Semantic search enabled")
+        except Exception as e:
+            cm._embedding_engine = None
+            log.warning("Semantic search disabled: %s", e)
 
     WebHandler.cm = cm
     WebHandler.auth_token = token

@@ -314,6 +314,8 @@ Security model (v1.0.11+ hardening):
 - `/api/auth/register` and `/api/auth/login` are the only public auth endpoints
 - Session tokens and login rate-limit lock state are persisted in SQLite (still enforced after process restart)
 - Changing password revokes all existing session tokens for that account
+- Non-loopback bind now requires `--token` by default; otherwise startup is refused unless explicitly overriding with `--allow-insecure-public-bind`
+- Project-level access is now scoped by logged-in user (`user_project_access`), preventing cross-user project_dir access
 
 - Multi-project switching, memory browse/search/edit/delete/export/import
 - Semantic search (vector similarity matching)
@@ -433,6 +435,14 @@ Or add env to MCP config:
 | Web | Native HTTPServer + Vanilla JS |
 
 ## 📋 Changelog
+
+### v1.0.13
+
+- 🔐 Added per-user project authorization (`user_project_access`) and enforced project_dir access checks across web API routes
+- 🛡️ Added startup guard for public bind: non-loopback `--bind` now requires `--token` by default
+- 🧱 Hardened API id parsing for `/api/issues/{id}` and `/api/tasks/{id}` to return `400` instead of server errors
+- 🧪 Added security regression tests for cross-user project isolation and public-bind guard
+- 🔄 Release workflow now gates desktop build/release with Python compile + pytest quality checks
 
 ### v1.0.12
 

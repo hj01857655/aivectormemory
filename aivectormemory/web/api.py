@@ -4,12 +4,14 @@ from urllib.parse import urlparse, parse_qs, unquote
 from aivectormemory.db.state_repo import StateRepo
 from aivectormemory.db.issue_repo import IssueRepo
 from aivectormemory.web.routes import memories, issues, tasks, tags, projects, auth, maintenance
+from aivectormemory.web.routes.access import has_project_access, normalize_project_dir
 
 
 def _resolve_project(cm, params):
     """如果 URL 带 ?project=xxx 则覆盖 cm.project_dir，返回临时 project_dir"""
     override = params.get("project", [None])[0]
-    return override if override is not None else cm.project_dir
+    selected = override if override is not None else cm.project_dir
+    return normalize_project_dir(selected)
 
 
 def handle_api_request(handler, cm):
@@ -18,6 +20,7 @@ def handle_api_request(handler, cm):
     params = parse_qs(parsed.query)
     pdir = _resolve_project(cm, params)
     method = handler.command
+    username = getattr(handler, "auth_username", None)
 
     # --- Auth 路由（无需认证） ---
     auth_routes = {
@@ -31,6 +34,10 @@ def handle_api_request(handler, cm):
     if method == "GET" and path == "/api/auth/me":
         return _json_response(handler, auth.get_current_user(handler))
 
+    if username and not has_project_access(cm.conn, username, pdir):
+        handler.send_error(403, "Forbidden: project access denied")
+        return
+
     # --- 资源 ID 路由 ---
     if path.startswith("/api/memories/") and len(path.split("/")) == 4:
         mid = path.split("/")[3]
@@ -43,10 +50,17 @@ def handle_api_request(handler, cm):
 
     if path.startswith("/api/projects/") and method == "DELETE":
         proj_dir = unquote("/".join(path.split("/")[3:]))
+        if username and not has_project_access(cm.conn, username, proj_dir):
+            handler.send_error(403, "Forbidden: project access denied")
+            return
         return _json_response(handler, projects.delete_project(cm, proj_dir))
 
     if path.startswith("/api/issues/") and len(path.split("/")) == 4:
-        inum = int(path.split("/")[3])
+        seg = path.split("/")[3]
+        try:
+            inum = int(seg)
+        except ValueError:
+            return _json_response(handler, {"error": "invalid issue id"}, 400)
         repo = IssueRepo(cm.conn, pdir)
         row = repo.get_by_number(inum)
         is_archived = row is None
@@ -66,7 +80,10 @@ def handle_api_request(handler, cm):
         seg = path.split("/")[3]
         if seg == "archived" and method == "GET":
             return _json_response(handler, tasks.get_archived_tasks(cm, params, pdir))
-        tid = int(seg)
+        try:
+            tid = int(seg)
+        except ValueError:
+            return _json_response(handler, {"error": "invalid task id"}, 400)
         if method == "PUT":
             return _json_response(handler, tasks.put_task(handler, cm, tid, pdir))
         elif method == "DELETE":
@@ -84,7 +101,7 @@ def handle_api_request(handler, cm):
             "/api/tasks": lambda: tasks.get_tasks(cm, params, pdir),
             "/api/stats": lambda: projects.get_stats(cm, pdir),
             "/api/tags": lambda: tags.get_tags(cm, params, pdir),
-            "/api/projects": lambda: projects.get_projects(cm),
+            "/api/projects": lambda: projects.get_projects(cm, username=username),
             "/api/export": lambda: memories.export_memories(cm, params, pdir),
             "/api/browse": lambda: projects.browse_directory(params),
             "/api/maintenance/health": lambda: maintenance.health_check(cm),
@@ -95,7 +112,7 @@ def handle_api_request(handler, cm):
         "POST": {
             "/api/import": lambda: memories.import_memories(handler, cm, pdir),
             "/api/search": lambda: memories.search_memories(handler, cm, pdir),
-            "/api/projects": lambda: projects.add_project(handler, cm),
+            "/api/projects": lambda: projects.add_project(handler, cm, username=username),
             "/api/issues": lambda: issues.post_issue(handler, cm, pdir),
             "/api/tasks": lambda: tasks.post_tasks(handler, cm, pdir),
             "/api/settings/language": lambda: _set_language(handler),

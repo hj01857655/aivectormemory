@@ -94,6 +94,7 @@ def _run_web(token: str | None = None, project_dir: str | None = None, db_dir: s
             cmd.extend(["--token", token])
         env = os.environ.copy()
         env["AIVM_DB_DIR"] = local_db_dir
+        env["AIVM_DISABLE_EMBEDDING"] = "1"
         process = subprocess.Popen(
             cmd,
             cwd=ROOT_DIR,
@@ -276,3 +277,83 @@ def test_password_change_revokes_existing_sessions():
         )
         assert status == 200
         assert payload.get("token")
+
+
+def test_project_access_isolation_between_users():
+    from urllib.parse import quote
+
+    with _run_web() as base_url:
+        token_a = _register_and_login(base_url, "sec_user_07", "Strong#Pass1234")
+        private_project = "E:/VSCodeSpace/private-alpha"
+
+        status, payload = _http_json(
+            f"{base_url}/api/projects",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={"project_dir": private_project},
+        )
+        assert status == 200, payload
+        assert payload.get("success") is True
+
+        status, _ = _http_json(
+            f"{base_url}/api/status?project={quote(private_project, safe='')}",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert status == 200
+
+        token_b = _register_and_login(base_url, "sec_user_08", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/projects",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        names = {p["project_dir"] for p in payload.get("projects", [])}
+        assert private_project not in names
+
+        status, _ = _http_json(
+            f"{base_url}/api/status?project={quote(private_project, safe='')}",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 403
+
+        encoded = quote(private_project, safe="")
+        status, _ = _http_json(
+            f"{base_url}/api/projects/{encoded}",
+            method="DELETE",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 403
+
+
+def test_public_bind_requires_server_token():
+    with tempfile.TemporaryDirectory(prefix="avm-bind-guard-") as project_dir:
+        with tempfile.TemporaryDirectory(prefix="avm-bind-guard-db-") as db_dir:
+            cmd = [
+                _python_for_web(),
+                "-m",
+                "aivectormemory",
+                "web",
+                "--project-dir",
+                project_dir,
+                "--port",
+                str(_free_port()),
+                "--bind",
+                "0.0.0.0",
+                "--quiet",
+            ]
+            env = os.environ.copy()
+            env["AIVM_DB_DIR"] = db_dir
+            env["AIVM_DISABLE_EMBEDDING"] = "1"
+            proc = subprocess.run(
+                cmd,
+                cwd=ROOT_DIR,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                timeout=10,
+                check=False,
+            )
+            assert proc.returncode != 0
+            combined = f"{proc.stdout}\n{proc.stderr}".lower()
+            assert "refusing non-loopback bind without server token" in combined

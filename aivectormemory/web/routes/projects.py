@@ -3,6 +3,12 @@ import json
 from aivectormemory.db.memory_repo import MemoryRepo
 from aivectormemory.db.user_memory_repo import UserMemoryRepo
 from aivectormemory.db.issue_repo import IssueRepo
+from aivectormemory.web.routes.access import (
+    normalize_project_dir,
+    grant_project_access,
+    list_project_access,
+    revoke_project_access,
+)
 
 
 def get_stats(cm, pdir):
@@ -40,8 +46,11 @@ def _merged_tag_counts(mem_repo, user_repo, pdir):
     return merged
 
 
-def get_projects(cm):
+def get_projects(cm, username=None):
     conn = cm.conn
+    allowed = None
+    if username:
+        allowed = list_project_access(conn, username)
     rows = conn.execute(
         "SELECT project_dir, COUNT(*) as mem_count FROM memories GROUP BY project_dir"
     ).fetchall()
@@ -87,6 +96,8 @@ def get_projects(cm):
     for pd, info in sorted(projects.items(), key=lambda x: -x[1]["memories"]):
         if not pd:
             continue
+        if allowed is not None and normalize_project_dir(pd) not in allowed:
+            continue
         result.append({
             "project_dir": pd,
             "name": pd.replace("\\", "/").rsplit("/", 1)[-1] if pd else "unknown",
@@ -98,18 +109,21 @@ def get_projects(cm):
     return {"projects": result}
 
 
-def add_project(handler, cm):
+def add_project(handler, cm, username=None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     project_dir = (body.get("project_dir") or "").strip()
     if not project_dir:
         return {"error": "project_dir is required"}
+    if not username:
+        return {"error": "unauthorized"}
     project_dir = project_dir.replace("\\", "/")
     conn = cm.conn
     now = __import__("datetime").datetime.now().astimezone().isoformat()
     conn.execute(
         "INSERT OR IGNORE INTO session_state (project_dir, is_blocked, block_reason, next_step, current_task, progress, recent_changes, pending, updated_at) VALUES (?,0,'','','','[]','[]','[]',?)",
         (project_dir, now))
+    grant_project_access(conn, username, project_dir)
     conn.commit()
     return {"success": True, "project_dir": project_dir}
 
@@ -136,13 +150,26 @@ def delete_project(cm, project_dir):
     if not project_dir:
         return {"success": False, "error": "Cannot delete empty project"}
     conn = cm.conn
-    mem_ids = [r["id"] for r in conn.execute("SELECT id FROM memories WHERE project_dir = ?", (project_dir,)).fetchall()]
+    normalized = normalize_project_dir(project_dir)
+    variants = sorted({normalized, normalized.replace("/", "\\")})
+    placeholders = ",".join("?" for _ in variants)
+
+    mem_ids = [
+        r["id"]
+        for r in conn.execute(
+            f"SELECT id FROM memories WHERE project_dir IN ({placeholders})",
+            variants,
+        ).fetchall()
+    ]
     if mem_ids:
-        placeholders = ",".join("?" * len(mem_ids))
-        conn.execute(f"DELETE FROM vec_memories WHERE id IN ({placeholders})", mem_ids)
-        conn.execute(f"DELETE FROM memories WHERE id IN ({placeholders})", mem_ids)
-    conn.execute("DELETE FROM issues WHERE project_dir = ?", (project_dir,))
-    conn.execute("DELETE FROM issues_archive WHERE project_dir = ?", (project_dir,))
-    conn.execute("DELETE FROM session_state WHERE project_dir = ?", (project_dir,))
+        mem_placeholders = ",".join("?" * len(mem_ids))
+        conn.execute(f"DELETE FROM vec_memories WHERE id IN ({mem_placeholders})", mem_ids)
+        conn.execute(f"DELETE FROM memories WHERE id IN ({mem_placeholders})", mem_ids)
+    conn.execute(f"DELETE FROM issues WHERE project_dir IN ({placeholders})", variants)
+    conn.execute(f"DELETE FROM issues_archive WHERE project_dir IN ({placeholders})", variants)
+    conn.execute(f"DELETE FROM tasks WHERE project_dir IN ({placeholders})", variants)
+    conn.execute(f"DELETE FROM tasks_archive WHERE project_dir IN ({placeholders})", variants)
+    conn.execute(f"DELETE FROM session_state WHERE project_dir IN ({placeholders})", variants)
+    revoke_project_access(conn, normalized)
     conn.commit()
     return {"success": True, "deleted_memories": len(mem_ids)}

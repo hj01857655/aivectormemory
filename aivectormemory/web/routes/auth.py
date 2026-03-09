@@ -5,6 +5,7 @@ import os
 import re
 import time
 from datetime import datetime
+from aivectormemory.web.routes.access import grant_project_access
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,32}$")
 SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -139,6 +140,7 @@ def register(handler, cm, read_body):
         "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
         (username, pw_hash, now),
     )
+    grant_project_access(conn, username, cm.project_dir)
     conn.commit()
     return {"success": True}
 
@@ -182,6 +184,8 @@ def login(handler, cm, read_body):
         "UPDATE users SET last_login = ? WHERE id = ?",
         (datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), row[0]),
     )
+    # 登录时确保当前服务 project_dir 至少对该用户可见（幂等）。
+    grant_project_access(conn, username, cm.project_dir)
     conn.commit()
 
     return {"token": token, "username": username, "expires_in": SESSION_TTL_SECONDS}

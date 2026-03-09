@@ -294,6 +294,8 @@ run migrate-project --from E:/VSCodeSpace/ace-lite --to E:/VSCodeSpace/ace
 - 仅 `/api/auth/register` 与 `/api/auth/login` 可在未登录状态访问
 - 会话 token 与登录限速锁定状态持久化到 SQLite（进程重启后仍生效）
 - 修改密码会吊销该账号的所有已登录会话 token
+- 非回环地址（如 `0.0.0.0`）默认必须配置 `--token` 才允许启动；未配置会拒绝启动（除非显式使用 `--allow-insecure-public-bind`）
+- 项目访问已按登录用户隔离（`user_project_access`），阻断跨用户 `project_dir` 越权访问
 
 - 多项目切换，记忆浏览/搜索/编辑/删除/导出/导入
 - 语义搜索（向量相似度匹配）
@@ -413,6 +415,14 @@ export HF_ENDPOINT=https://hf-mirror.com
 | Web | 原生 HTTPServer + Vanilla JS |
 
 ## 📋 更新日志
+
+### v1.0.13
+
+- 🔐 新增项目级用户授权表 `user_project_access`，Web API 全面校验 `project_dir` 访问权限，修复跨用户越权访问
+- 🛡️ 新增公网绑定安全闸门：非回环 `--bind` 默认必须配 `--token`，否则拒绝启动（可用 `--allow-insecure-public-bind` 显式覆盖）
+- 🧱 加固 `/api/issues/{id}` 与 `/api/tasks/{id}` 参数校验，非法 ID 返回 `400`，避免服务端异常
+- 🧪 新增安全回归测试：跨用户项目隔离 + 公网绑定保护
+- 🔄 发布工作流新增质量门禁：先跑 Python `compileall + pytest`，通过后再构建发布桌面端
 
 ### v1.0.12
 
