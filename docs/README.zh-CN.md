@@ -123,12 +123,23 @@ run install
 
 ```bash
 cd /path/to/your/project
-uvx aivectormemory install
+uvx --from aivectormemory@latest run install
 ```
 
 > 需要先安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，`uvx` 会自动下载并运行，无需手动安装包。
+> 对 MCP stdio 场景，建议使用 `uvx -q --no-progress --from ...`，避免安装输出污染协议流。
 
-### 方式三：手动配置
+### 方式三：Codex CLI 快速配置
+
+```bash
+cd /path/to/your/project
+run install          # 交互安装时选择 Codex CLI
+
+# 或一次全局注册（所有项目通用，按当前目录动态生效）
+codex mcp add aivectormemory -- uvx -q --no-progress --from aivectormemory@latest run --project-dir .
+```
+
+### 方式四：手动配置
 
 ```json
 {
@@ -153,8 +164,14 @@ uvx aivectormemory install
 | VSCode | `.vscode/mcp.json` |
 | Trae | `.trae/mcp.json` |
 | OpenCode | `opencode.json` |
+| Codex CLI | 通过 `codex mcp add` 注册（写入用户级 Codex MCP 配置） |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
 </details>
+
+## 📘 教程
+
+- [Codex CLI 教程（一次配置，动态项目目录）](codex-cli-tutorial.md)
 
 ## 🛠️ 8 个 MCP 工具
 
@@ -365,6 +382,11 @@ export HF_ENDPOINT=https://hf-mirror.com
 | Web | 原生 HTTPServer + Vanilla JS |
 
 ## 📋 更新日志
+
+### v1.0.11
+
+- 🔧 新增 Codex CLI 一次全局注册命令（`uvx -q --no-progress --from ... run --project-dir .`）
+- 📘 新增 Codex CLI 动态项目目录教程，覆盖跨项目复用场景
 
 ### v1.0.8
 

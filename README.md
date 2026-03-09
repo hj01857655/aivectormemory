@@ -133,6 +133,9 @@ uvx --from aivectormemory@latest run install
 ```bash
 cd /path/to/your/project
 run install          # choose Codex CLI in the interactive installer
+
+# Or register once globally (works in all projects, dynamic current dir)
+codex mcp add aivectormemory -- uvx -q --no-progress --from aivectormemory@latest run --project-dir .
 ```
 
 ### Option 4: Manual configuration
@@ -160,7 +163,7 @@ run install          # choose Codex CLI in the interactive installer
 | VSCode | `.vscode/mcp.json` |
 | Trae | `.trae/mcp.json` |
 | OpenCode | `opencode.json` |
-| Codex CLI | 通过 `codex mcp add` 注册（写入用户级 Codex MCP 配置） |
+| Codex CLI | Register with `codex mcp add` (stored in user-level Codex MCP config) |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 
 </details>
@@ -397,6 +400,11 @@ Or add env to MCP config:
 | Web | Native HTTPServer + Vanilla JS |
 
 ## 📋 Changelog
+
+### v1.0.11
+
+- 🔧 Added Codex CLI one-time global registration command (`uvx -q --no-progress --from ... run --project-dir .`)
+- 📘 Added Codex CLI tutorial with dynamic project directory setup
 
 ### v1.0.8
 
