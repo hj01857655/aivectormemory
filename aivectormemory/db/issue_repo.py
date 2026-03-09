@@ -1,6 +1,7 @@
 import json
 
 from .base import BaseRepo
+from aivectormemory import vector_backend
 
 
 class IssueRepo(BaseRepo):
@@ -94,6 +95,7 @@ class IssueRepo(BaseRepo):
                 "INSERT INTO vec_issues_archive (id, embedding) VALUES (?,?)",
                 (archive_id, json.dumps(emb))
             )
+            vector_backend.upsert_vector("vec_issues_archive", str(archive_id), emb)
         self.conn.execute("DELETE FROM issues WHERE id=?", (issue_id,))
         self._commit()
         return {"issue_id": issue_id, "archived_at": now, "memory_id": r.get("memory_id", "")}
@@ -194,14 +196,37 @@ class IssueRepo(BaseRepo):
             return None
         memory_id = row["memory_id"] if "memory_id" in row.keys() else ""
         self.conn.execute("DELETE FROM issues_archive WHERE id=?", (archive_id,))
+        self.conn.execute("DELETE FROM vec_issues_archive WHERE id=?", (archive_id,))
+        vector_backend.delete_vector("vec_issues_archive", str(archive_id))
         self._commit()
         return {"archive_id": archive_id, "deleted": True, "memory_id": memory_id}
 
     def search_archive_by_vector(self, embedding: list[float], top_k: int = 5) -> list[dict]:
-        rows = self.conn.execute(
+        merged: dict[int, dict] = {}
+        q_rows = vector_backend.search_vectors("vec_issues_archive", embedding, top_k * 2) or []
+        for row in q_rows:
+            try:
+                rid = int(row["id"])
+            except (TypeError, ValueError):
+                continue
+            merged[rid] = {
+                "id": rid,
+                "distance": float(row["distance"]),
+                "_backend": "qdrant",
+            }
+
+        sql_rows = self.conn.execute(
             "SELECT id, distance FROM vec_issues_archive WHERE embedding MATCH ? AND k = ?",
             (json.dumps(embedding), top_k * 2)
         ).fetchall()
+        for row in sql_rows:
+            d = dict(row)
+            rid = int(d["id"])
+            if rid not in merged or float(d["distance"]) < float(merged[rid]["distance"]):
+                merged[rid] = d
+
+        rows = list(merged.values())
+        rows.sort(key=lambda x: float(x["distance"]))
         results = []
         for r in rows:
             archive = self.conn.execute(
@@ -210,7 +235,11 @@ class IssueRepo(BaseRepo):
             ).fetchone()
             if archive:
                 d = dict(archive)
-                d["similarity"] = round(1 - (r["distance"] ** 2) / 2, 4)
+                if r.get("_backend") == "qdrant":
+                    sim = 1.0 - float(r["distance"])
+                else:
+                    sim = 1 - (float(r["distance"]) ** 2) / 2
+                d["similarity"] = round(sim, 4)
                 results.append(d)
             if len(results) >= top_k:
                 break

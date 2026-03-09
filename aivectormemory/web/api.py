@@ -22,119 +22,123 @@ def handle_api_request(handler, cm):
     method = handler.command
     username = getattr(handler, "auth_username", None)
 
-    # --- Auth 路由（无需认证） ---
-    auth_routes = {
-        "/api/auth/register": lambda: auth.register(handler, cm, _read_body),
-        "/api/auth/login": lambda: auth.login(handler, cm, _read_body),
-        "/api/auth/logout": lambda: auth.logout(handler, cm),
-        "/api/auth/change-password": lambda: auth.change_password(handler, cm, _read_body),
-    }
-    if method == "POST" and path in auth_routes:
-        return _json_response(handler, auth_routes[path]())
-    if method == "GET" and path == "/api/auth/me":
-        return _json_response(handler, auth.get_current_user(handler))
+    try:
+        # --- Auth 路由（无需认证） ---
+        auth_routes = {
+            "/api/auth/register": lambda: auth.register(handler, cm, _read_body),
+            "/api/auth/login": lambda: auth.login(handler, cm, _read_body),
+            "/api/auth/logout": lambda: auth.logout(handler, cm),
+            "/api/auth/change-password": lambda: auth.change_password(handler, cm, _read_body),
+        }
+        if method == "POST" and path in auth_routes:
+            return _json_response(handler, auth_routes[path]())
+        if method == "GET" and path == "/api/auth/me":
+            return _json_response(handler, auth.get_current_user(handler))
 
-    if username and not has_project_access(cm.conn, username, pdir):
-        handler.send_error(403, "Forbidden: project access denied")
-        return
-
-    # --- 资源 ID 路由 ---
-    if path.startswith("/api/memories/") and len(path.split("/")) == 4:
-        mid = path.split("/")[3]
-        if method == "GET":
-            return _json_response(handler, memories.get_memory_detail(cm, mid, pdir))
-        elif method == "PUT":
-            return _json_response(handler, memories.put_memory(handler, cm, mid, pdir))
-        elif method == "DELETE":
-            return _json_response(handler, memories.delete_memory(cm, mid, pdir))
-
-    if path.startswith("/api/projects/") and method == "DELETE":
-        proj_dir = unquote("/".join(path.split("/")[3:]))
-        if username and not has_project_access(cm.conn, username, proj_dir):
+        if username and not has_project_access(cm.conn, username, pdir):
             handler.send_error(403, "Forbidden: project access denied")
             return
-        return _json_response(handler, projects.delete_project(cm, proj_dir))
 
-    if path.startswith("/api/issues/") and len(path.split("/")) == 4:
-        seg = path.split("/")[3]
-        try:
-            inum = int(seg)
-        except ValueError:
-            return _json_response(handler, {"error": "invalid issue id"}, 400)
-        repo = IssueRepo(cm.conn, pdir)
-        row = repo.get_by_number(inum)
-        is_archived = row is None
-        if is_archived:
-            row = repo.get_archived_by_number(inum)
-        if not row:
-            return _json_response(handler, {"error": "not found"}, 404)
-        iid = row["id"]
-        if method == "GET":
-            return _json_response(handler, dict(row))
-        elif method == "PUT":
-            return _json_response(handler, issues.put_issue(handler, cm, iid, pdir))
-        elif method == "DELETE":
-            return _json_response(handler, issues.delete_issue(handler, cm, iid, pdir, params, is_archived=is_archived))
+        # --- 资源 ID 路由 ---
+        if path.startswith("/api/memories/") and len(path.split("/")) == 4:
+            mid = path.split("/")[3]
+            if method == "GET":
+                return _json_response(handler, memories.get_memory_detail(cm, mid, pdir))
+            elif method == "PUT":
+                return _json_response(handler, memories.put_memory(handler, cm, mid, pdir))
+            elif method == "DELETE":
+                return _json_response(handler, memories.delete_memory(cm, mid, pdir))
 
-    if path.startswith("/api/tasks/") and len(path.split("/")) == 4:
-        seg = path.split("/")[3]
-        if seg == "archived" and method == "GET":
-            return _json_response(handler, tasks.get_archived_tasks(cm, params, pdir))
-        try:
-            tid = int(seg)
-        except ValueError:
-            return _json_response(handler, {"error": "invalid task id"}, 400)
-        if method == "PUT":
-            return _json_response(handler, tasks.put_task(handler, cm, tid, pdir))
-        elif method == "DELETE":
-            return _json_response(handler, tasks.delete_task(cm, tid, pdir))
+        if path.startswith("/api/projects/") and method == "DELETE":
+            proj_dir = unquote("/".join(path.split("/")[3:]))
+            if username and not has_project_access(cm.conn, username, proj_dir):
+                handler.send_error(403, "Forbidden: project access denied")
+                return
+            return _json_response(handler, projects.delete_project(cm, proj_dir))
 
-    if path == "/api/tasks" and method == "DELETE":
-        return _json_response(handler, tasks.delete_tasks_by_feature(handler, cm, pdir, params))
+        if path.startswith("/api/issues/") and len(path.split("/")) == 4:
+            seg = path.split("/")[3]
+            try:
+                inum = int(seg)
+            except ValueError:
+                return _json_response(handler, {"error": "invalid issue id"}, 400)
+            repo = IssueRepo(cm.conn, pdir)
+            row = repo.get_by_number(inum)
+            is_archived = row is None
+            if is_archived:
+                row = repo.get_archived_by_number(inum)
+            if not row:
+                return _json_response(handler, {"error": "not found"}, 404)
+            iid = row["id"]
+            if method == "GET":
+                return _json_response(handler, dict(row))
+            elif method == "PUT":
+                return _json_response(handler, issues.put_issue(handler, cm, iid, pdir))
+            elif method == "DELETE":
+                return _json_response(handler, issues.delete_issue(handler, cm, iid, pdir, params, is_archived=is_archived))
 
-    # --- 集合路由 ---
-    route_map = {
-        "GET": {
-            "/api/memories": lambda: memories.get_memories(cm, params, pdir),
-            "/api/status": lambda: _get_status(cm, pdir),
-            "/api/issues": lambda: issues.get_issues(cm, params, pdir),
-            "/api/tasks": lambda: tasks.get_tasks(cm, params, pdir),
-            "/api/stats": lambda: projects.get_stats(cm, pdir),
-            "/api/tags": lambda: tags.get_tags(cm, params, pdir),
-            "/api/projects": lambda: projects.get_projects(cm, username=username),
-            "/api/export": lambda: memories.export_memories(cm, params, pdir),
-            "/api/browse": lambda: projects.browse_directory(params),
-            "/api/maintenance/health": lambda: maintenance.health_check(cm),
-            "/api/maintenance/stats": lambda: maintenance.db_stats(cm),
-            "/api/maintenance/backups": lambda: maintenance.list_backups(cm),
-            "/api/settings/language": lambda: _get_language(),
-        },
-        "POST": {
-            "/api/import": lambda: memories.import_memories(handler, cm, pdir),
-            "/api/search": lambda: memories.search_memories(handler, cm, pdir),
-            "/api/projects": lambda: projects.add_project(handler, cm, username=username),
-            "/api/issues": lambda: issues.post_issue(handler, cm, pdir),
-            "/api/tasks": lambda: tasks.post_tasks(handler, cm, pdir),
-            "/api/settings/language": lambda: _set_language(handler),
-            "/api/maintenance/repair": lambda: maintenance.repair_missing(cm),
-            "/api/maintenance/backup": lambda: maintenance.backup_db(cm),
-        },
-        "PUT": {
-            "/api/status": lambda: _put_status(handler, cm, pdir),
-            "/api/tags/rename": lambda: tags.rename_tag(handler, cm, pdir),
-            "/api/tags/merge": lambda: tags.merge_tags(handler, cm, pdir),
-        },
-        "DELETE": {
-            "/api/memories": lambda: memories.delete_memories_batch(handler, cm, pdir),
-            "/api/tags/delete": lambda: tags.delete_tags(handler, cm, pdir),
-        },
-    }
+        if path.startswith("/api/tasks/") and len(path.split("/")) == 4:
+            seg = path.split("/")[3]
+            if seg == "archived" and method == "GET":
+                return _json_response(handler, tasks.get_archived_tasks(cm, params, pdir))
+            try:
+                tid = int(seg)
+            except ValueError:
+                return _json_response(handler, {"error": "invalid task id"}, 400)
+            if method == "PUT":
+                return _json_response(handler, tasks.put_task(handler, cm, tid, pdir))
+            elif method == "DELETE":
+                return _json_response(handler, tasks.delete_task(cm, tid, pdir))
 
-    route_fn = route_map.get(method, {}).get(path)
-    if route_fn:
-        _json_response(handler, route_fn())
-    else:
-        handler.send_error(404, "API not found")
+        if path == "/api/tasks" and method == "DELETE":
+            return _json_response(handler, tasks.delete_tasks_by_feature(handler, cm, pdir, params))
+
+        # --- 集合路由 ---
+        route_map = {
+            "GET": {
+                "/api/memories": lambda: memories.get_memories(cm, params, pdir, username=username),
+                "/api/status": lambda: _get_status(cm, pdir),
+                "/api/issues": lambda: issues.get_issues(cm, params, pdir),
+                "/api/tasks": lambda: tasks.get_tasks(cm, params, pdir),
+                "/api/stats": lambda: projects.get_stats(cm, pdir),
+                "/api/tags": lambda: tags.get_tags(cm, params, pdir),
+                "/api/projects": lambda: projects.get_projects(cm, username=username),
+                "/api/export": lambda: memories.export_memories(cm, params, pdir, username=username),
+                "/api/browse": lambda: projects.browse_directory(params),
+                "/api/maintenance/health": lambda: maintenance.health_check(cm),
+                "/api/maintenance/stats": lambda: maintenance.db_stats(cm),
+                "/api/maintenance/backups": lambda: maintenance.list_backups(cm),
+                "/api/settings/language": lambda: _get_language(),
+            },
+            "POST": {
+                "/api/import": lambda: memories.import_memories(handler, cm, pdir, username=username),
+                "/api/search": lambda: memories.search_memories(handler, cm, pdir),
+                "/api/projects": lambda: projects.add_project(handler, cm, username=username),
+                "/api/issues": lambda: issues.post_issue(handler, cm, pdir),
+                "/api/tasks": lambda: tasks.post_tasks(handler, cm, pdir),
+                "/api/settings/language": lambda: _set_language(handler),
+                "/api/maintenance/repair": lambda: maintenance.repair_missing(cm),
+                "/api/maintenance/backup": lambda: maintenance.backup_db(cm),
+            },
+            "PUT": {
+                "/api/status": lambda: _put_status(handler, cm, pdir),
+                "/api/tags/rename": lambda: tags.rename_tag(handler, cm, pdir),
+                "/api/tags/merge": lambda: tags.merge_tags(handler, cm, pdir),
+            },
+            "DELETE": {
+                "/api/memories": lambda: memories.delete_memories_batch(handler, cm, pdir),
+                "/api/tags/delete": lambda: tags.delete_tags(handler, cm, pdir),
+            },
+        }
+
+        route_fn = route_map.get(method, {}).get(path)
+        if route_fn:
+            _json_response(handler, route_fn())
+        else:
+            handler.send_error(404, "API not found")
+    except Exception as exc:
+        handler.log_error("Unhandled API exception: %s %s (%s)", method, path, exc)
+        _json_response(handler, {"error": "internal server error"}, 500)
 
 
 # --- 公共工具 ---

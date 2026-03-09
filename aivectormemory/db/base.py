@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from aivectormemory import vector_backend
+
 
 class BaseRepo:
     """所有 Repo 的基类"""
@@ -47,6 +49,7 @@ class BaseMemoryRepo(BaseRepo):
         placeholders = ",".join("?" * len(vals))
         self.conn.execute(f"INSERT INTO {self.TABLE} ({cols}) VALUES ({placeholders})", vals)
         self.conn.execute(f"INSERT INTO {self.VEC_TABLE} (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
+        self._mirror_vector_to_external(mid, embedding)
         self._sync_tags(mid, tags)
         self._commit()
         return {"id": mid, "action": "created"}
@@ -64,19 +67,49 @@ class BaseMemoryRepo(BaseRepo):
             (content, json.dumps(tags, ensure_ascii=False), session_id, now, mid))
         self.conn.execute(f"DELETE FROM {self.VEC_TABLE} WHERE id=?", (mid,))
         self.conn.execute(f"INSERT INTO {self.VEC_TABLE} (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
+        self._mirror_vector_to_external(mid, embedding)
         self._sync_tags(mid, tags)
         self._commit()
         return {"id": mid, "action": "updated"}
 
-    def _find_duplicate(self, embedding: list[float], threshold: float) -> dict | None:
-        rows = self.conn.execute(
-            f"SELECT id, distance FROM {self.VEC_TABLE} WHERE embedding MATCH ? AND k = 5",
-            (json.dumps(embedding),)
+    def _mirror_vector_to_external(self, mid: str, embedding: list[float]) -> None:
+        if vector_backend.get_vector_backend() != "qdrant":
+            return
+        vector_backend.upsert_vector(self.VEC_TABLE, mid, embedding)
+
+    @staticmethod
+    def _similarity_from_row(row: dict) -> float:
+        if row.get("_backend") == "qdrant":
+            return 1.0 - float(row["distance"])
+        return 1 - (float(row["distance"]) ** 2) / 2
+
+    def _search_vector_rows(self, embedding: list[float], k: int) -> list[dict]:
+        merged: dict[str, dict] = {}
+        if vector_backend.get_vector_backend() == "qdrant":
+            q_rows = vector_backend.search_vectors(self.VEC_TABLE, embedding, k)
+            for row in q_rows or []:
+                rid = str(row["id"])
+                merged[rid] = row
+        sql_rows = self.conn.execute(
+            f"SELECT id, distance FROM {self.VEC_TABLE} WHERE embedding MATCH ? AND k = ?",
+            (json.dumps(embedding), k)
         ).fetchall()
+        for row in sql_rows:
+            d = dict(row)
+            rid = str(d["id"])
+            old = merged.get(rid)
+            if old is None or float(d["distance"]) < float(old["distance"]):
+                merged[rid] = d
+        rows = list(merged.values())
+        rows.sort(key=lambda x: float(x["distance"]))
+        return rows
+
+    def _find_duplicate(self, embedding: list[float], threshold: float) -> dict | None:
+        rows = self._search_vector_rows(embedding, 5)
         for r in rows:
             if not self._is_same_scope(r["id"]):
                 continue
-            similarity = 1 - (r["distance"] ** 2) / 2
+            similarity = self._similarity_from_row(r)
             if similarity >= threshold:
                 return dict(r)
         return None
@@ -89,10 +122,7 @@ class BaseMemoryRepo(BaseRepo):
         multiplier = 3
         while multiplier <= 10:
             k = top_k * multiplier
-            rows = self.conn.execute(
-                f"SELECT id, distance FROM {self.VEC_TABLE} WHERE embedding MATCH ? AND k = ?",
-                (json.dumps(embedding), k)
-            ).fetchall()
+            rows = self._search_vector_rows(embedding, k)
             results = self._filter_and_collect(rows, top_k, filters)
             if len(results) >= top_k or multiplier >= 10:
                 return results
@@ -140,6 +170,8 @@ class BaseMemoryRepo(BaseRepo):
     def delete(self, mid: str) -> bool:
         cur = self.conn.execute(f"DELETE FROM {self.TABLE} WHERE id=?", (mid,))
         self.conn.execute(f"DELETE FROM {self.VEC_TABLE} WHERE id=?", (mid,))
+        if vector_backend.get_vector_backend() == "qdrant":
+            vector_backend.delete_vector(self.VEC_TABLE, mid)
         if self.TAG_TABLE:
             self.conn.execute(f"DELETE FROM {self.TAG_TABLE} WHERE memory_id=?", (mid,))
         self._commit()

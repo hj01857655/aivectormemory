@@ -1,11 +1,51 @@
 import json
+import math
 
 from aivectormemory.utils import now_iso, safe_table
 from aivectormemory.db.memory_repo import MemoryRepo
 from aivectormemory.db.user_memory_repo import UserMemoryRepo
+from aivectormemory.web.routes.access import has_project_access, list_project_access, normalize_project_dir
 
 
-def get_memories(cm, params, pdir):
+EMBEDDING_DIM = 384
+
+
+def _embedding_error(message: str) -> str:
+    return f"invalid embedding: {message}"
+
+
+def _normalize_embedding(embedding):
+    if not isinstance(embedding, list):
+        return None, _embedding_error(f"must be a list of {EMBEDDING_DIM} numbers")
+    if len(embedding) != EMBEDDING_DIM:
+        return None, _embedding_error(f"must contain {EMBEDDING_DIM} float values")
+    normalized = []
+    for value in embedding:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None, _embedding_error("contains non-numeric value")
+        f = float(value)
+        if not math.isfinite(f):
+            return None, _embedding_error("contains non-finite value")
+        normalized.append(f)
+    return normalized, None
+
+
+def _same_project(mem: dict, pdir: str) -> bool:
+    return normalize_project_dir(mem.get("project_dir")) == normalize_project_dir(pdir)
+
+
+def _accessible_project_memories(repo: MemoryRepo, pdir: str, username: str | None) -> list[dict]:
+    if not username:
+        return repo.get_all(limit=999999, offset=0)
+    allowed_projects = list_project_access(repo.conn, username)
+    rows = []
+    for project in sorted(allowed_projects):
+        rows.extend(repo.get_all(limit=999999, offset=0, project_dir=project))
+    rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return rows
+
+
+def get_memories(cm, params, pdir, username: str | None = None):
     scope = params.get("scope", ["all"])[0]
     query = params.get("query", [None])[0]
     tag = params.get("tag", [None])[0]
@@ -23,9 +63,14 @@ def get_memories(cm, params, pdir):
         elif scope == "project":
             all_rows = repo.list_by_tags([tag], scope="project", project_dir=pdir, limit=9999, source=source)
         else:
-            proj_rows = repo.list_by_tags([tag], scope="project", project_dir=pdir, limit=9999, source=source)
+            proj_rows = []
+            for row in _accessible_project_memories(repo, pdir, username):
+                row_tags = json.loads(row["tags"]) if isinstance(row["tags"], str) else (row.get("tags") or [])
+                if tag in row_tags and (not source or row.get("source", "manual") == source):
+                    proj_rows.append(row)
             user_rows = user_repo.list_by_tags([tag], limit=9999, source=source)
             all_rows = proj_rows + user_rows
+        all_rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         if query:
             q = query.lower()
             all_rows = [r for r in all_rows if q in r.get("content", "").lower()]
@@ -38,7 +83,7 @@ def get_memories(cm, params, pdir):
         elif scope == "project":
             all_rows = repo.get_all(limit=9999, offset=0, project_dir=pdir)
         else:
-            all_rows = repo.get_all(limit=9999, offset=0) + user_repo.get_all(limit=9999)
+            all_rows = _accessible_project_memories(repo, pdir, username) + user_repo.get_all(limit=9999)
         all_rows = [r for r in all_rows if not ex_set.intersection(json.loads(r["tags"]) if isinstance(r["tags"], str) else (r["tags"] or []))]
         if source:
             all_rows = [r for r in all_rows if r.get("source", "manual") == source]
@@ -54,7 +99,7 @@ def get_memories(cm, params, pdir):
             elif scope == "project":
                 all_rows = repo.get_all(limit=9999, offset=0, project_dir=pdir)
             else:
-                all_rows = repo.get_all(limit=9999, offset=0) + user_repo.get_all(limit=9999)
+                all_rows = _accessible_project_memories(repo, pdir, username) + user_repo.get_all(limit=9999)
             if source:
                 all_rows = [r for r in all_rows if r.get("source", "manual") == source]
             q = query.lower()
@@ -69,10 +114,12 @@ def get_memories(cm, params, pdir):
                 rows = repo.get_all(limit=limit, offset=offset, project_dir=pdir)
                 total = repo.count(project_dir=pdir)
             else:
-                rows = repo.get_all(limit=limit, offset=offset)
-                total = repo.count() + user_repo.count()
+                project_rows = _accessible_project_memories(repo, pdir, username)
+                total = len(project_rows) + user_repo.count()
+                rows = project_rows[offset:offset + limit]
                 if len(rows) < limit:
-                    user_rows = user_repo.get_all(limit=limit - len(rows))
+                    user_offset = max(0, offset - len(project_rows))
+                    user_rows = user_repo.get_all(limit=limit - len(rows), offset=user_offset)
                     rows = rows + user_rows
             if source:
                 rows = [r for r in rows if r.get("source", "manual") == source]
@@ -84,7 +131,7 @@ def get_memories(cm, params, pdir):
 def get_memory_detail(cm, mid, pdir):
     repo = MemoryRepo(cm.conn, pdir)
     mem = repo.get_by_id(mid)
-    if mem:
+    if mem and _same_project(mem, pdir):
         return mem
     user_repo = UserMemoryRepo(cm.conn)
     mem = user_repo.get_by_id(mid)
@@ -96,6 +143,8 @@ def put_memory(handler, cm, mid, pdir):
     body = _read_body(handler)
     repo = MemoryRepo(cm.conn, pdir)
     mem = repo.get_by_id(mid)
+    if mem and not _same_project(mem, pdir):
+        mem = None
     table = "memories"
     if not mem:
         user_repo = UserMemoryRepo(cm.conn)
@@ -121,8 +170,10 @@ def put_memory(handler, cm, mid, pdir):
 
 def delete_memory(cm, mid, pdir):
     repo = MemoryRepo(cm.conn, pdir)
-    if repo.delete(mid):
-        return {"deleted": True, "id": mid}
+    mem = repo.get_by_id(mid)
+    if mem and _same_project(mem, pdir):
+        if repo.delete(mid):
+            return {"deleted": True, "id": mid}
     user_repo = UserMemoryRepo(cm.conn)
     if user_repo.delete(mid):
         return {"deleted": True, "id": mid}
@@ -137,14 +188,15 @@ def delete_memories_batch(handler, cm, pdir):
     user_repo = UserMemoryRepo(cm.conn)
     deleted = []
     for mid in ids:
-        if repo.delete(mid):
+        mem = repo.get_by_id(mid)
+        if mem and _same_project(mem, pdir) and repo.delete(mid):
             deleted.append(mid)
         elif user_repo.delete(mid):
             deleted.append(mid)
     return {"deleted_count": len(deleted), "ids": deleted}
 
 
-def export_memories(cm, params, pdir):
+def export_memories(cm, params, pdir, username: str | None = None):
     scope = params.get("scope", ["all"])[0]
     repo = MemoryRepo(cm.conn, pdir)
     user_repo = UserMemoryRepo(cm.conn)
@@ -156,7 +208,7 @@ def export_memories(cm, params, pdir):
         memories = repo.get_all(limit=999999, project_dir=pdir)
         vec_table = "vec_memories"
     else:
-        memories = repo.get_all(limit=999999) + user_repo.get_all(limit=999999)
+        memories = _accessible_project_memories(repo, pdir, username) + user_repo.get_all(limit=999999)
         vec_table = None
 
     result = []
@@ -185,43 +237,106 @@ def export_memories(cm, params, pdir):
     return {"memories": result, "count": len(result), "project_dir": pdir}
 
 
-def import_memories(handler, cm, pdir):
+def import_memories(handler, cm, pdir, username: str | None = None):
     from aivectormemory.web.api import _read_body
     body = _read_body(handler)
     items = body.get("memories", [])
-    if not items:
+    if not isinstance(items, list) or not items:
         return {"error": "no memories to import"}
     repo = MemoryRepo(cm.conn, pdir)
     user_repo = UserMemoryRepo(cm.conn)
     imported, skipped = 0, 0
-    for item in items:
-        mid = item.get("id", "")
-        if not mid or repo.get_by_id(mid) or user_repo.get_by_id(mid):
+    errors = []
+    for idx, item in enumerate(items):
+        try:
+            if not isinstance(item, dict):
+                skipped += 1
+                errors.append({"index": idx, "error": "item must be an object"})
+                continue
+
+            mid = item.get("id", "")
+            if not mid or repo.get_by_id(mid) or user_repo.get_by_id(mid):
+                skipped += 1
+                continue
+
+            now = now_iso()
+            tags = item.get("tags", "[]")
+            if isinstance(tags, list):
+                tags_str = json.dumps(tags, ensure_ascii=False)
+            elif isinstance(tags, str):
+                tags_str = tags
+            else:
+                tags_str = "[]"
+
+            scope = item.get("scope", "project")
+            if scope not in {"project", "user"}:
+                skipped += 1
+                errors.append({"id": mid, "error": "invalid scope"})
+                continue
+
+            target_project = normalize_project_dir(item.get("project_dir", pdir))
+            if scope == "project":
+                if not target_project:
+                    skipped += 1
+                    errors.append({"id": mid, "error": "project_dir required for project scope"})
+                    continue
+                if username and not has_project_access(cm.conn, username, target_project):
+                    skipped += 1
+                    errors.append({"id": mid, "error": "forbidden project_dir"})
+                    continue
+                if not username and target_project != normalize_project_dir(pdir):
+                    skipped += 1
+                    errors.append({"id": mid, "error": "forbidden project_dir"})
+                    continue
+
+            embedding = item.get("embedding")
+            if embedding is None:
+                from aivectormemory.embedding.engine import EmbeddingEngine
+                embedding = EmbeddingEngine().encode(item.get("content", ""))
+            embedding, emb_err = _normalize_embedding(embedding)
+            if emb_err:
+                skipped += 1
+                errors.append({"id": mid, "error": emb_err})
+                continue
+
+            if scope == "user":
+                cm.conn.execute(
+                    "INSERT INTO user_memories (id, content, tags, source, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
+                    (
+                        mid,
+                        item.get("content", ""),
+                        tags_str,
+                        item.get("source", "manual"),
+                        item.get("session_id", 0),
+                        item.get("created_at", now),
+                        now,
+                    ),
+                )
+                cm.conn.execute("INSERT INTO vec_user_memories (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
+            else:
+                cm.conn.execute(
+                    "INSERT INTO memories (id, content, tags, scope, project_dir, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                    (
+                        mid,
+                        item.get("content", ""),
+                        tags_str,
+                        scope,
+                        target_project,
+                        item.get("session_id", 0),
+                        item.get("created_at", now),
+                        now,
+                    ),
+                )
+                cm.conn.execute("INSERT INTO vec_memories (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
+            imported += 1
+        except Exception as e:
             skipped += 1
-            continue
-        now = now_iso()
-        tags = item.get("tags", "[]")
-        tags_str = json.dumps(tags, ensure_ascii=False) if isinstance(tags, list) else tags
-        scope = item.get("scope", "project")
-        embedding = item.get("embedding")
-        if not embedding:
-            from aivectormemory.embedding.engine import EmbeddingEngine
-            embedding = EmbeddingEngine().encode(item.get("content", ""))
-        if scope == "user":
-            cm.conn.execute(
-                "INSERT INTO user_memories (id, content, tags, source, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?)",
-                (mid, item.get("content", ""), tags_str, item.get("source", "manual"),
-                 item.get("session_id", 0), item.get("created_at", now), now))
-            cm.conn.execute("INSERT INTO vec_user_memories (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
-        else:
-            cm.conn.execute(
-                "INSERT INTO memories (id, content, tags, scope, project_dir, session_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)",
-                (mid, item.get("content", ""), tags_str, scope,
-                 item.get("project_dir", pdir), item.get("session_id", 0), item.get("created_at", now), now))
-            cm.conn.execute("INSERT INTO vec_memories (id, embedding) VALUES (?,?)", (mid, json.dumps(embedding)))
-        imported += 1
+            errors.append({"id": item.get("id", ""), "error": str(e)})
     cm.conn.commit()
-    return {"imported": imported, "skipped": skipped}
+    result = {"imported": imported, "skipped": skipped}
+    if errors:
+        result["errors"] = errors
+    return result
 
 
 def search_memories(handler, cm, pdir):

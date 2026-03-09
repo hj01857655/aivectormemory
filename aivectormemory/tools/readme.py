@@ -86,7 +86,7 @@ def _generate_tools_section(tools: list[dict]) -> str:
 def _generate_deps_section(pyproject: dict) -> str:
     lines = ["## 📦 Tech Stack\n", "| Component | Technology |", "|-----------|-----------|"]
     lines.append(f"| Runtime | Python {pyproject.get('requires_python', '>= 3.10')} |")
-    lines.append("| Vector DB | SQLite + sqlite-vec |")
+    lines.append("| Vector DB | SQLite + sqlite-vec (default), optional Qdrant integration |")
     lines.append("| Embedding | ONNX Runtime + intfloat/multilingual-e5-small |")
     lines.append("| Tokenizer | HuggingFace Tokenizers |")
     lines.append("| Protocol | Model Context Protocol (MCP) |")

@@ -14,6 +14,7 @@ import pytest
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+EMBEDDING_384 = [0.0] * 384
 
 
 def _python_for_web() -> str:
@@ -359,3 +360,140 @@ def test_public_bind_requires_server_token():
             assert proc.returncode != 0
             combined = f"{proc.stdout}\n{proc.stderr}".lower()
             assert "refusing non-loopback bind without server token" in combined
+
+
+def test_scope_all_memories_and_export_do_not_leak_private_project():
+    from urllib.parse import quote
+
+    with _run_web() as base_url:
+        private_project = "E:/VSCodeSpace/private-sec-01"
+        token_a = _register_and_login(base_url, "sec_user_09", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/projects",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={"project_dir": private_project},
+        )
+        assert status == 200, payload
+        assert payload.get("success") is True
+
+        status, payload = _http_json(
+            f"{base_url}/api/import",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={
+                "memories": [
+                    {
+                        "id": "sec_priv_mem_01",
+                        "content": "private content",
+                        "tags": ["private"],
+                        "scope": "project",
+                        "project_dir": private_project,
+                        "embedding": EMBEDDING_384,
+                    }
+                ]
+            },
+        )
+        assert status == 200, payload
+        assert payload.get("imported") == 1
+
+        token_b = _register_and_login(base_url, "sec_user_10", "Strong#Pass1234")
+        encoded = quote(private_project, safe="")
+        status, _ = _http_json(
+            f"{base_url}/api/status?project={encoded}",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 403
+
+        status, payload = _http_json(
+            f"{base_url}/api/memories?scope=all&limit=100",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        leaked = [m for m in payload.get("memories", []) if m.get("project_dir") == private_project]
+        assert leaked == []
+
+        status, payload = _http_json(
+            f"{base_url}/api/export?scope=all",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert status == 200, payload
+        leaked = [m for m in payload.get("memories", []) if m.get("project_dir") == private_project]
+        assert leaked == []
+
+
+def test_import_rejects_forbidden_project_dir():
+    from urllib.parse import quote
+
+    with _run_web() as base_url:
+        private_project = "E:/VSCodeSpace/private-sec-02"
+        token_a = _register_and_login(base_url, "sec_user_11", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/projects",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_a}"},
+            body={"project_dir": private_project},
+        )
+        assert status == 200, payload
+        assert payload.get("success") is True
+
+        token_b = _register_and_login(base_url, "sec_user_12", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/import",
+            method="POST",
+            headers={"Authorization": f"Bearer {token_b}"},
+            body={
+                "memories": [
+                    {
+                        "id": "sec_forbidden_mem_01",
+                        "content": "inject private project",
+                        "tags": ["attack"],
+                        "scope": "project",
+                        "project_dir": private_project,
+                        "embedding": EMBEDDING_384,
+                    }
+                ]
+            },
+        )
+        assert status == 200, payload
+        assert payload.get("imported") == 0
+        assert payload.get("skipped") == 1
+        errors = payload.get("errors") or []
+        assert errors
+        assert errors[0].get("error") == "forbidden project_dir"
+
+        encoded = quote(private_project, safe="")
+        status, payload = _http_json(
+            f"{base_url}/api/memories?scope=project&project={encoded}&limit=100",
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        assert status == 200, payload
+        ids = {m.get("id") for m in payload.get("memories", [])}
+        assert "sec_forbidden_mem_01" not in ids
+
+
+def test_import_invalid_embedding_returns_structured_error():
+    with _run_web() as base_url:
+        token = _register_and_login(base_url, "sec_user_13", "Strong#Pass1234")
+        status, payload = _http_json(
+            f"{base_url}/api/import",
+            method="POST",
+            headers={"Authorization": f"Bearer {token}"},
+            body={
+                "memories": [
+                    {
+                        "id": "sec_bad_embedding_01",
+                        "content": "bad embedding",
+                        "tags": ["bad"],
+                        "scope": "project",
+                        "embedding": [0.1, 0.2],
+                    }
+                ]
+            },
+        )
+        assert status == 200, payload
+        assert payload.get("imported") == 0
+        assert payload.get("skipped") == 1
+        errors = payload.get("errors") or []
+        assert errors
+        assert "invalid embedding" in errors[0].get("error", "")

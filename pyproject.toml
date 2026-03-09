@@ -30,6 +30,11 @@ dependencies = [
     "jieba>=0.42",
 ]
 
+[project.optional-dependencies]
+qdrant = [
+    "qdrant-client>=1.9",
+]
+
 [project.scripts]
 run = "aivectormemory.__main__:main"
 

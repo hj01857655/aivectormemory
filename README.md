@@ -138,6 +138,32 @@ run install          # choose Codex CLI in the interactive installer
 codex mcp add aivectormemory -- uvx -q --no-progress --from aivectormemory@latest run --project-dir .
 ```
 
+### Optional: Enable Qdrant as vector search backend
+
+Default remains `SQLite + sqlite-vec`. If you want local Qdrant integration (recommended as a gradual migration), install extra dependency and set env vars:
+
+```bash
+pip install "aivectormemory[qdrant]"
+export AIVM_VECTOR_BACKEND=qdrant
+export AIVM_QDRANT_URL=http://127.0.0.1:6333
+```
+
+Local Qdrant quick start:
+
+```bash
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+Notes:
+
+- This is **integration mode**, not hard replacement: SQLite metadata path is preserved.
+- If Qdrant is unavailable, vector reads automatically fall back to sqlite-vec.
+- Current Qdrant coverage: memory vectors (`vec_memories`, `vec_user_memories`) and archived issue vectors (`vec_issues_archive`).
+- Optional collection override envs:
+  - `AIVM_QDRANT_COLLECTION_VEC_MEMORIES`
+  - `AIVM_QDRANT_COLLECTION_VEC_USER_MEMORIES`
+  - `AIVM_QDRANT_COLLECTION_VEC_ISSUES_ARCHIVE`
+
 ### Option 4: Manual configuration
 
 ```json
@@ -428,13 +454,25 @@ Or add env to MCP config:
 | Component | Technology |
 |-----------|-----------|
 | Runtime | Python >= 3.10 |
-| Vector DB | SQLite + sqlite-vec |
+| Vector DB | SQLite + sqlite-vec (default), optional Qdrant integration |
 | Embedding | ONNX Runtime + intfloat/multilingual-e5-small |
 | Tokenizer | HuggingFace Tokenizers |
 | Protocol | Model Context Protocol (MCP) |
 | Web | Native HTTPServer + Vanilla JS |
 
 ## 📋 Changelog
+
+### Unreleased
+
+- 🔐 Web security hardening for memories/import:
+  - fixed cross-project leakage on `/api/memories` and `/api/export` when `scope=all`
+  - blocked unauthorized `project_dir` writes in `/api/import`
+  - added embedding payload validation and structured error responses
+  - added API-level exception fallback to prevent abrupt disconnects
+- 🧩 Added optional Qdrant integration mode:
+  - new `AIVM_VECTOR_BACKEND=qdrant` backend switch
+  - memory vectors and archived issue vectors support Qdrant mirror + search merge (Qdrant-first, sqlite fallback)
+  - added regression tests for vector backend integration
 
 ### v1.0.15
 

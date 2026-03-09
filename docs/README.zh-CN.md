@@ -139,6 +139,32 @@ run install          # 交互安装时选择 Codex CLI
 codex mcp add aivectormemory -- uvx -q --no-progress --from aivectormemory@latest run --project-dir .
 ```
 
+### 可选：启用 Qdrant 向量检索后端
+
+默认仍是 `SQLite + sqlite-vec`。如需本地接入 Qdrant（建议渐进迁移），安装可选依赖并设置环境变量：
+
+```bash
+pip install "aivectormemory[qdrant]"
+export AIVM_VECTOR_BACKEND=qdrant
+export AIVM_QDRANT_URL=http://127.0.0.1:6333
+```
+
+本地 Qdrant 快速启动：
+
+```bash
+docker run -d --name qdrant -p 6333:6333 -p 6334:6334 qdrant/qdrant
+```
+
+说明：
+
+- 这是**集成模式**，不是强替换：SQLite 元数据链路保持不变。
+- Qdrant 不可用时，向量检索会自动回退到 sqlite-vec。
+- 当前 Qdrant 覆盖范围：记忆向量（`vec_memories`、`vec_user_memories`）与归档问题向量（`vec_issues_archive`）。
+- 可选 collection 覆盖环境变量：
+  - `AIVM_QDRANT_COLLECTION_VEC_MEMORIES`
+  - `AIVM_QDRANT_COLLECTION_VEC_USER_MEMORIES`
+  - `AIVM_QDRANT_COLLECTION_VEC_ISSUES_ARCHIVE`
+
 ### 方式四：手动配置
 
 ```json
@@ -408,13 +434,25 @@ export HF_ENDPOINT=https://hf-mirror.com
 | 组件 | 技术 |
 |------|------|
 | 运行时 | Python >= 3.10 |
-| 向量数据库 | SQLite + sqlite-vec |
+| 向量数据库 | SQLite + sqlite-vec（默认），可选集成 Qdrant |
 | Embedding | ONNX Runtime + intfloat/multilingual-e5-small |
 | 分词器 | HuggingFace Tokenizers |
 | 协议 | Model Context Protocol (MCP) |
 | Web | 原生 HTTPServer + Vanilla JS |
 
 ## 📋 更新日志
+
+### Unreleased
+
+- 🔐 Web 安全加固（memories/import）：
+  - 修复 `scope=all` 下 `/api/memories` 与 `/api/export` 的跨项目泄露
+  - 修复 `/api/import` 可写入无权限 `project_dir` 的越权问题
+  - 增加 embedding 输入校验与结构化错误返回
+  - 增加 API 级异常兜底，避免连接异常中断
+- 🧩 新增可选 Qdrant 集成模式：
+  - 新增 `AIVM_VECTOR_BACKEND=qdrant` 后端开关
+  - 记忆向量与归档问题向量支持 Qdrant 镜像写入 + 合并检索（Qdrant 优先，sqlite 兜底）
+  - 新增向量后端回归测试覆盖
 
 ### v1.0.15
 

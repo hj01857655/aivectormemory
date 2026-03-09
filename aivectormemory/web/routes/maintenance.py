@@ -5,6 +5,8 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from aivectormemory import vector_backend
+
 
 def health_check(cm):
     """Health check: count memories vs vec embeddings, find missing/orphans."""
@@ -24,6 +26,18 @@ def health_check(cm):
             r[key] = c.execute(sql).fetchone()[0]
         except Exception:
             r[key] = 0
+    vb = vector_backend.health()
+    r["vector_backend"] = vb.get("backend", "sqlite")
+    r["qdrant_available"] = bool(vb.get("qdrant_available", False))
+    if vb.get("error"):
+        r["qdrant_error"] = vb["error"]
+    if r["vector_backend"] == "qdrant":
+        q_mem = vector_backend.count_vectors("vec_memories")
+        q_user = vector_backend.count_vectors("vec_user_memories")
+        if q_mem is not None:
+            r["qdrant_vec_memories_total"] = q_mem
+        if q_user is not None:
+            r["qdrant_vec_user_memories_total"] = q_user
     return r
 
 
@@ -56,6 +70,18 @@ def db_stats(cm):
             stats["embedding_dim"] = 0
     except Exception:
         stats["embedding_dim"] = 0
+
+    vb = vector_backend.health()
+    stats["vector_backend"] = vb.get("backend", "sqlite")
+    stats["qdrant_available"] = bool(vb.get("qdrant_available", False))
+    if vb.get("error"):
+        stats["qdrant_error"] = vb["error"]
+    if stats["vector_backend"] == "qdrant":
+        stats["qdrant_counts"] = {}
+        for table in ["vec_memories", "vec_user_memories", "vec_issues_archive"]:
+            cnt = vector_backend.count_vectors(table)
+            if cnt is not None:
+                stats["qdrant_counts"][table] = cnt
 
     return stats
 
